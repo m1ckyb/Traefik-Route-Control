@@ -43,10 +43,12 @@ http://localhost:5000
 ```
 
 5. **First-Time Setup**:
-   - On first access, you'll be prompted to create an admin account
+   - On first access, you'll be redirected to the login page to create an admin account
+   - You have 5 minutes from application startup to complete this setup
    - Enter a username and click "Create Account with Passkey"
    - Follow your browser's prompts to register a passkey (fingerprint, face ID, or device PIN)
    - Once registered, you'll be logged in automatically
+   - If the 5-minute window expires, restart the application to create the admin account
 
 6. Configure settings:
    - Navigate to http://localhost:5000/settings
@@ -206,12 +208,14 @@ When deploying behind a reverse proxy or with a custom domain, set these environ
 
 - `RP_ID`: Your domain (e.g., `example.com` or `localhost` for local testing)
 - `ORIGIN`: Full URL of your application (e.g., `https://example.com` or `http://localhost:5000`)
+- `SETUP_WINDOW_SECONDS`: Time window in seconds for initial admin account creation (default: 300 = 5 minutes)
 
 Example Docker Compose:
 ```yaml
 environment:
   - RP_ID=traefik.example.com
   - ORIGIN=https://traefik.example.com
+  - SETUP_WINDOW_SECONDS=300
 ```
 
 ## 🔄 Migrating from Single Service
