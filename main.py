@@ -11,7 +11,7 @@ import json
 import secrets
 import time
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from webauthn import (
     generate_registration_options,
@@ -580,7 +580,7 @@ def get_expected_origin():
     
     # For development (default config), dynamically determine origin from request
     # This allows localhost, 127.0.0.1, and other local addresses to work
-    if request:
+    if has_request_context():
         scheme = request.scheme  # http or https
         host = request.host      # includes hostname and port
         return f"{scheme}://{host}"
@@ -599,7 +599,7 @@ def get_expected_rp_id():
     
     # For development (default config), extract hostname from request
     # This supports localhost, 127.0.0.1, etc.
-    if request:
+    if has_request_context():
         host = request.host
         # Remove port if present
         hostname = host.split(':')[0]
