@@ -54,7 +54,7 @@
             </button>
             {% endif %}
             <a href="/services/{{ service.id }}/edit" class="btn btn-secondary">✏️ Edit</a>
-            <button class="btn btn-danger" onclick="deleteService({{ service.id }}, '{{ service.name }}')">
+            <button class="btn btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)">
                 🗑️ Delete
             </button>
         </div>
