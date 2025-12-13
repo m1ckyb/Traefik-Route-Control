@@ -204,10 +204,16 @@ The application uses **WebAuthn** (passkeys) for secure, passwordless authentica
 
 ### Environment Variables for WebAuthn
 
+**For development (localhost):**
+- No configuration needed! The application automatically detects the origin (localhost, 127.0.0.1, etc.) from your browser request
+- Supports `http://localhost:5000`, `http://127.0.0.1:5000`, and any other localhost-like addresses
+- Works out of the box for local testing
+
+**For production (custom domain/reverse proxy):**
 When deploying behind a reverse proxy or with a custom domain, set these environment variables:
 
-- `RP_ID`: Your domain (e.g., `example.com` or `localhost` for local testing)
-- `ORIGIN`: Full URL of your application (e.g., `https://example.com` or `http://localhost:5000`)
+- `RP_ID`: Your domain (e.g., `example.com`)
+- `ORIGIN`: Full URL of your application (e.g., `https://example.com`)
 - `SETUP_WINDOW_SECONDS`: Time window in seconds for initial admin account creation (default: 300 = 5 minutes)
 
 Example Docker Compose:
@@ -239,6 +245,7 @@ volumes:
 ## 🔒 Security Notes
 
 - **Passkey authentication required**: All routes are protected with WebAuthn passkey authentication
+- **Localhost development**: Automatically works with localhost, 127.0.0.1, and other local addresses - no configuration needed
 - Store sensitive credentials securely - they are saved in the SQLite database
 - Consider using Docker secrets or environment variables for production deployments
 - Rotating URLs provide security through obscurity - they are temporary by design
