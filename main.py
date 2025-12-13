@@ -838,6 +838,11 @@ def login_complete():
         return jsonify({"success": True})
         
     except Exception as e:
+        # Clear session on error
+        session.pop('authentication_challenge', None)
+        session.pop('authentication_user_id', None)
+        session.pop('authentication_rp_id', None)
+        session.pop('authentication_origin', None)
         return jsonify({"error": str(e)}), 400
 
 @app.route('/')
