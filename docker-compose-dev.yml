@@ -13,4 +13,3 @@ services:
     # If Redis is on a different server, you can remove this line.
     #network_mode: host
     # Default command to run the API server
-    command: serve

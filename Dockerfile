@@ -16,8 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the main script
 COPY main.py .
 
-# Set the entrypoint so arguments can be passed directly
-ENTRYPOINT ["python", "main.py"]
-
-# Default command if no arguments are provided
-CMD ["serve"]
+# Run the application with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
