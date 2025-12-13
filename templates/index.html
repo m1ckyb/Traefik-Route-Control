@@ -42,14 +42,14 @@
         
         <div class="service-actions">
             {% if service.enabled %}
-            <button class="btn btn-warning" onclick="toggleService({{ service.id }}, false)">
+            <button class="btn btn-warning" onclick="toggleService({{ service.id }}, false, event)">
                 🛑 Turn Off
             </button>
-            <button class="btn btn-secondary" onclick="rotateService({{ service.id }})">
+            <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
                 🔄 Rotate URL
             </button>
             {% else %}
-            <button class="btn btn-success" onclick="toggleService({{ service.id }}, true)">
+            <button class="btn btn-success" onclick="toggleService({{ service.id }}, true, event)">
                 🚀 Turn On
             </button>
             {% endif %}

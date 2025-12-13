@@ -20,12 +20,11 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Initialize database
 db.init_db()
 
-# Try to load from .env file if exists (for migration)
-env_path = os.path.join(script_dir, ".env")
-if os.path.exists(env_path):
-    load_dotenv(env_path)
-    # Migrate settings from .env to database
-    migrate_env_to_db()
+# Constants
+REQUIRED_SETTINGS = [
+    "CF_API_TOKEN", "CF_ZONE_ID", "DOMAIN_ROOT", "REDIS_HOST",
+    "UNIFI_HOST", "UNIFI_USER", "UNIFI_PASS", "UNIFI_RULE_NAME"
+]
 
 def migrate_env_to_db():
     """Migrate settings from .env file to database (one-time)."""
@@ -64,13 +63,19 @@ def migrate_env_to_db():
     if migrated:
         print("✅ Migrated settings from .env to database")
 
+# Try to load from .env file if exists (for migration)
+env_path = os.path.join(script_dir, ".env")
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+    # Migrate settings from .env to database
+    migrate_env_to_db()
+
 def get_setting(key, required=True):
     """Get a setting from database."""
     value = db.get_setting(key)
     if not value and required:
         print(f"❌ Configuration Error: '{key}' is missing from settings")
-        if key in ["CF_API_TOKEN", "CF_ZONE_ID", "DOMAIN_ROOT", "REDIS_HOST", 
-                   "UNIFI_HOST", "UNIFI_USER", "UNIFI_PASS", "UNIFI_RULE_NAME"]:
+        if key in REQUIRED_SETTINGS:
             print(f"   Please configure settings via the web UI at /settings")
             return None
     return value

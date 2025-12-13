@@ -1,5 +1,5 @@
 // Service control functions
-async function toggleService(serviceId, enable) {
+async function toggleService(serviceId, enable, event) {
     const action = enable ? 'on' : 'off';
     const confirmMsg = enable 
         ? 'Turn on this service and create a new rotating URL?' 
@@ -34,7 +34,7 @@ async function toggleService(serviceId, enable) {
     }
 }
 
-async function rotateService(serviceId) {
+async function rotateService(serviceId, event) {
     if (!confirm('Generate a new rotating URL for this service?')) return;
     
     const btn = event.target;
