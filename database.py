@@ -56,11 +56,25 @@ def init_db():
             )
         """)
         
-        # Migration: Add hass_entity_id column if it doesn't exist
-        cursor = conn.execute("PRAGMA table_info(services)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if 'hass_entity_id' not in columns:
-            conn.execute("ALTER TABLE services ADD COLUMN hass_entity_id TEXT")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Check current schema version
+        cursor = conn.execute("SELECT MAX(version) as version FROM schema_version")
+        row = cursor.fetchone()
+        current_version = row['version'] if row['version'] else 0
+        
+        # Migration 1: Add hass_entity_id column if not exists
+        if current_version < 1:
+            cursor = conn.execute("PRAGMA table_info(services)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'hass_entity_id' not in columns:
+                conn.execute("ALTER TABLE services ADD COLUMN hass_entity_id TEXT")
+            conn.execute("INSERT INTO schema_version (version) VALUES (1)")
         
         conn.commit()
 

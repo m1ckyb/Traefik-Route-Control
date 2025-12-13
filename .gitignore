@@ -22,3 +22,4 @@ dist/
 *.db
 data/
 config.db
+.secret_key

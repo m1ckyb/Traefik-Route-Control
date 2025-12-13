@@ -29,6 +29,9 @@ from webauthn.helpers.structs import (
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
 
+# Import DATA_DIR for secret key storage
+from database import DATA_DIR
+
 # Suppress InsecureRequestWarning for UniFi self-signed certs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -505,7 +508,16 @@ def cmd_on():
 
 # ================= API / MAIN =================
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# Use persistent secret key from environment or generate one and store it
+SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
+if os.path.exists(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, 'rb') as f:
+        app.secret_key = f.read()
+else:
+    app.secret_key = os.urandom(24)
+    with open(SECRET_KEY_FILE, 'wb') as f:
+        f.write(app.secret_key)
 
 # Flask-Login setup
 login_manager = LoginManager()
@@ -557,9 +569,10 @@ def register_begin():
     if existing_user:
         return jsonify({"error": "Username already exists"}), 400
     
-    # Create user
-    user_id = db.add_user(username)
-    user_id_bytes = user_id.to_bytes(4, byteorder='big')
+    # Generate temporary user ID for this registration attempt
+    # We'll create the actual user only after successful verification
+    temp_user_id = random.randint(1000000, 9999999)
+    user_id_bytes = temp_user_id.to_bytes(4, byteorder='big')
     
     # Generate registration options
     registration_options = generate_registration_options(
@@ -579,9 +592,9 @@ def register_begin():
         ]
     )
     
-    # Store challenge in session
+    # Store challenge and username in session
     session['registration_challenge'] = registration_options.challenge.hex()
-    session['registration_user_id'] = user_id
+    session['registration_username'] = username
     
     # Convert to JSON-serializable format
     options_json = options_to_json(registration_options)
@@ -596,9 +609,9 @@ def register_complete():
         return jsonify({"error": "Credential required"}), 400
     
     challenge = session.get('registration_challenge')
-    user_id = session.get('registration_user_id')
+    username = session.get('registration_username')
     
-    if not challenge or not user_id:
+    if not challenge or not username:
         return jsonify({"error": "Invalid session"}), 400
     
     try:
@@ -609,6 +622,9 @@ def register_complete():
             expected_rp_id=RP_ID,
             expected_origin=ORIGIN,
         )
+        
+        # Create user only after successful verification
+        user_id = db.add_user(username)
         
         # Store credential
         db.add_credential(
@@ -623,13 +639,14 @@ def register_complete():
         
         # Clear session
         session.pop('registration_challenge', None)
-        session.pop('registration_user_id', None)
+        session.pop('registration_username', None)
         
         return jsonify({"success": True})
         
     except Exception as e:
-        # Clean up user if registration failed
-        db.delete_user(user_id)
+        # Clear session on error
+        session.pop('registration_challenge', None)
+        session.pop('registration_username', None)
         return jsonify({"error": str(e)}), 400
 
 @app.route('/auth/login/begin', methods=['POST'])
