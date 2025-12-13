@@ -1,4 +1,5 @@
 Jellyfin Traefik Control
+
 A security-focused Python automation tool that temporarily exposes a local service (like Jellyfin) to the internet using rotating subdomains, dynamic Traefik routing, and automated firewall control.
 
 It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home Assistant.
