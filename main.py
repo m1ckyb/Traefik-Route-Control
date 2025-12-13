@@ -6,16 +6,18 @@ import string
 import os
 import sys
 import argparse
+import urllib3
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 
+# Suppress InsecureRequestWarning for UniFi self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # ================= CONFIGURATION =================
-# Load variables from .env file in the same directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(script_dir, ".env"))
 
 def get_env(key):
-    """Helper to get env var or exit if missing"""
     value = os.getenv(key)
     if not value:
         print(f"❌ Configuration Error: '{key}' is missing from .env file")
@@ -31,7 +33,7 @@ ORIGIN_RULE_NAME = get_env("ORIGIN_RULE_NAME")
 # Traefik / Redis Settings
 REDIS_HOST = get_env("REDIS_HOST")
 REDIS_PORT = int(get_env("REDIS_PORT"))
-REDIS_PASS = os.getenv("REDIS_PASS") # Optional, allows None
+REDIS_PASS = os.getenv("REDIS_PASS") 
 ROUTER_NAME = get_env("ROUTER_NAME")
 SERVICE_NAME = get_env("SERVICE_NAME")
 TARGET_INT_URL = get_env("TARGET_INT_URL")
@@ -41,10 +43,15 @@ HASS_URL = get_env("HASS_URL")
 HASS_ENTITY_ID = get_env("HASS_ENTITY_ID")
 HASS_TOKEN = get_env("HASS_TOKEN")
 
+# UniFi Settings
+UNIFI_HOST = get_env("UNIFI_HOST")
+UNIFI_USER = get_env("UNIFI_USER")
+UNIFI_PASS = get_env("UNIFI_PASS")
+UNIFI_RULE_NAME = get_env("UNIFI_RULE_NAME")
+
 # API Settings
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 5000))
-
 
 # ================= HELPER FUNCTIONS =================
 def get_redis():
@@ -64,6 +71,12 @@ def get_public_ip():
         return requests.get("https://api.ipify.org", timeout=5).text
     except:
         return "Unknown"
+
+def count_active_routers():
+    """Counts how many Traefik routers are currently active in Redis."""
+    r = get_redis()
+    keys = r.keys("traefik/http/routers/*/rule")
+    return len(keys)
 
 def cf_request(method, endpoint, data=None):
     headers = {
@@ -86,58 +99,142 @@ def update_hass(state):
             json={"state": state},
             timeout=5
         )
-        
-        # Check if the update actually succeeded (200 OK or 201 Created)
-        if response.status_code in [200, 201]:
-            print(f"   Home Assistant updated: {state}")
-        else:
+        if response.status_code not in [200, 201]:
             print(f"❌ Failed to update HA (Status {response.status_code}): {response.text}")
+    except Exception as e:
+        print(f"❌ HA Connection Failed: {e}")
+
+# ================= UNIFI LOGIC =================
+
+def check_unifi_rule():
+    """Reads the current status of the UniFi Port Forward rule."""
+    base_url = f"https://{UNIFI_HOST}"
+    session = requests.Session()
+    session.verify = False
+
+    try:
+        # Login
+        login_data = {"username": UNIFI_USER, "password": UNIFI_PASS}
+        resp = session.post(f"{base_url}/api/auth/login", json=login_data, timeout=5)
+        if resp.status_code != 200:
+            return None # Login failed
+
+        # Fetch Rules
+        pf_url = f"{base_url}/proxy/network/api/s/default/rest/portforward"
+        resp = session.get(pf_url, timeout=5)
+        rules = resp.json().get("data", [])
+        
+        target_rule = next((r for r in rules if r.get("name") == UNIFI_RULE_NAME), None)
+        if target_rule:
+            return target_rule["enabled"] # Returns True or False
+        return None # Rule not found
+        
+    except Exception:
+        return None # Connection error
+
+def toggle_unifi(enable_rule):
+    """Logs into UDM Pro and toggles the Port Forwarding Rule"""
+    base_url = f"https://{UNIFI_HOST}"
+    session = requests.Session()
+    session.verify = False 
+
+    print(f"🔹 Connecting to UniFi Controller ({UNIFI_HOST})...")
+
+    try:
+        login_data = {"username": UNIFI_USER, "password": UNIFI_PASS}
+        resp = session.post(f"{base_url}/api/auth/login", json=login_data, timeout=10)
+        
+        if resp.status_code != 200:
+            print(f"❌ UniFi Login Failed: HTTP {resp.status_code}")
+            return False
+            
+        csrf_token = resp.headers.get("x-csrf-token")
+        headers = {"X-CSRF-Token": csrf_token} if csrf_token else {}
 
     except Exception as e:
-        print(f"❌ Connection Failed: {e}")
+        print(f"❌ UniFi Connection Error: {e}")
+        return False
+
+    pf_url = f"{base_url}/proxy/network/api/s/default/rest/portforward"
+    
+    try:
+        resp = session.get(pf_url, timeout=10)
+        rules = resp.json().get("data", [])
+    except Exception as e:
+        print(f"❌ Error fetching rules: {e}")
+        return False
+
+    target_rule = next((r for r in rules if r.get("name") == UNIFI_RULE_NAME), None)
+
+    if not target_rule:
+        print(f"❌ Error: UniFi Rule '{UNIFI_RULE_NAME}' not found!")
+        return False
+
+    if target_rule["enabled"] == enable_rule:
+        print(f"   UniFi rule is already {'ENABLED' if enable_rule else 'DISABLED'}.")
+        return True
+
+    target_rule["enabled"] = enable_rule
+    try:
+        rule_id = target_rule["_id"]
+        resp = session.put(f"{pf_url}/{rule_id}", json=target_rule, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            print(f"✅ UniFi Rule '{UNIFI_RULE_NAME}' set to {'ENABLED' if enable_rule else 'DISABLED'}.")
+            return True
+        else:
+            print(f"❌ Failed to update rule: {resp.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Error updating rule: {e}")
+        return False
 
 # ================= CORE LOGIC =================
 def get_status():
-    """Returns a dictionary with the current status."""
     r = get_redis()
     current_rule = r.get(f"traefik/http/routers/{ROUTER_NAME}/rule")
     
+    # Check UniFi Status
+    firewall_status = "UNKNOWN"
+    is_open = check_unifi_rule()
+    if is_open is True:
+        firewall_status = "OPEN"
+    elif is_open is False:
+        firewall_status = "CLOSED"
+
     if current_rule:
         host = current_rule.replace("Host(`", "").replace("`)", "")
         return {
             "status": "ONLINE",
             "hostname": f"https://{host}",
-            "public_ip": get_public_ip()
+            "public_ip": get_public_ip(),
+            "firewall": firewall_status
         }
     else:
         return {
             "status": "OFFLINE",
-            "details": f"Redis key 'traefik/http/routers/{ROUTER_NAME}/rule' not found"
+            "details": f"Redis key not found",
+            "firewall": firewall_status
         }
-
-# ================= COMMANDS =================
-
-def cmd_status():
-    print("\n📊 === STATUS REPORT ===")
-    status_data = get_status()
-    if status_data['status'] == 'ONLINE':
-        print(f"✅ Status:   ONLINE")
-        print(f"🔗 Hostname: {status_data['hostname']}")
-        print(f"🌍 Public IP: {status_data['public_ip']}")
-    else:
-        print(f"⛔ Status:   OFFLINE")
-        print(f"   ({status_data['details']})")
-    print("========================\n")
 
 def cmd_off():
     print("\n🛑 === SHUTTING DOWN JELLYFIN ACCESS ===")
     r = get_redis()
-    
+
     print("🔹 Removing Traefik Router...")
     r.delete(f"traefik/http/routers/{ROUTER_NAME}/rule")
     r.delete(f"traefik/http/routers/{ROUTER_NAME}/service")
     r.delete(f"traefik/http/routers/{ROUTER_NAME}/tls/certResolver")
-    
+
+    remaining_count = count_active_routers()
+    print(f"   Active routers remaining: {remaining_count}")
+
+    if remaining_count == 0:
+        print("   No other services active. Closing firewall...")
+        toggle_unifi(False)
+    else:
+        print("   ⚠️ Other services are still active. Firewall will remain OPEN.")
+
     print("🔹 Cleaning up DNS records...")
     records = cf_request("GET", f"dns_records?type=A&name_contains=jf-")
     count = 0
@@ -157,6 +254,9 @@ def cmd_off():
 def cmd_on():
     print("\n🚀 === ROTATING / ENABLING JELLYFIN ACCESS ===")
     
+    if not toggle_unifi(True):
+        print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
+
     random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
     new_subdomain = f"jf-{random_part}"
     full_hostname = f"{new_subdomain}.{DOMAIN_ROOT}"
@@ -165,12 +265,10 @@ def cmd_on():
     print(f"   Target: {full_hostname}")
     print(f"   IP:     {public_ip}")
 
-    # 1. Cloudflare DNS
     print("🔹 Creating DNS Record...")
     dns_data = {"type": "A", "name": new_subdomain, "content": public_ip, "ttl": 1, "proxied": True}
     cf_request("POST", "dns_records", dns_data)
 
-    # 2. Cloudflare Origin Rule
     print("🔹 Updating Origin Rule...")
     ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
     rules = ruleset_data.get('result', {}).get('rules', [])
@@ -179,7 +277,6 @@ def cmd_on():
     ruleset_id = ruleset_data.get('result', {}).get('id')
 
     if target_rule:
-        # Must extract existing action logic to prevent API error 20015
         update_data = {
             "expression": f"http.host eq \"{full_hostname}\"",
             "description": ORIGIN_RULE_NAME,
@@ -189,17 +286,15 @@ def cmd_on():
         }
         cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
     else:
-        print("❌ Error: Origin Rule not found! Create a rule named 'Jellyfin Rotation' in Cloudflare first.")
+        print("❌ Error: Origin Rule not found!")
         return
 
-    # 3. Clean old DNS
     print("🔹 Cleaning old DNS...")
     records = cf_request("GET", f"dns_records?type=A&name_contains=jf-")
     for record in records.get('result', []):
         if record['name'] != full_hostname:
             cf_request("DELETE", f"dns_records/{record['id']}")
 
-    # 4. Traefik (Redis)
     print("🔹 Updating Traefik...")
     r = get_redis()
     r.set(f"traefik/http/routers/{ROUTER_NAME}/rule", f"Host(`{full_hostname}`)")
@@ -208,13 +303,12 @@ def cmd_on():
     r.set(f"traefik/http/routers/{ROUTER_NAME}/tls/certResolver", "main")
     r.set(f"traefik/http/services/{SERVICE_NAME}/loadbalancer/servers/0/url", TARGET_INT_URL)
 
-    # 5. Home Assistant
     print("🔹 Updating Home Assistant...")
     update_hass(f"https://{full_hostname}")
 
     print(f"✅ SUCCESS! Live at: https://{full_hostname}\n")
 
-# ================= API DEFINITION =================
+# ================= API / MAIN =================
 app = Flask(__name__)
 
 @app.route('/api/status', methods=['GET'])
@@ -231,8 +325,6 @@ def api_turn_off():
     cmd_off()
     return jsonify({"message": "Jellyfin access disabled successfully."})
 
-# ================= ENTRY POINT =================
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Control Jellyfin Traefik Rotation")
     parser.add_argument("action", choices=["on", "off", "status", "rotate", "serve"], 
@@ -240,7 +332,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.action == "status":
-        cmd_status()
+        s = get_status()
+        print(f"\n📊 STATUS: {s['status']}")
+        print(f"🔥 Firewall: {s['firewall']}")
+        if s.get('hostname'): print(f"🔗 URL: {s['hostname']}")
     elif args.action == "off":
         cmd_off()
     elif args.action == "on" or args.action == "rotate":
