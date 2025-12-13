@@ -24,7 +24,14 @@
         {% if is_setup %}
         <div class="setup-message">
             <h2>Welcome! Setup Required</h2>
+            {% if setup_expired %}
+            <p class="warning">⚠️ The 5-minute setup window has expired. Please restart the application to create an admin account.</p>
+            {% else %}
             <p>Create your admin account to get started.</p>
+            {% if in_setup_window %}
+            <p class="info">💡 You have 5 minutes from startup to complete setup.</p>
+            {% endif %}
+            {% endif %}
         </div>
         {% endif %}
         
@@ -36,9 +43,11 @@
             </div>
             
             {% if is_setup %}
+            {% if not setup_expired %}
             <button type="button" class="btn btn-primary btn-block" onclick="registerPasskey()">
                 🔑 Create Account with Passkey
             </button>
+            {% endif %}
             {% else %}
             <button type="button" class="btn btn-primary btn-block" onclick="authenticatePasskey()">
                 🔐 Sign In with Passkey
@@ -55,14 +64,31 @@
     <script>
         const isSetup = {{ 'true' if is_setup else 'false' }};
         
-        // Helper to convert ArrayBuffer to Base64
+        // Helper to convert ArrayBuffer to Base64URL (URL-safe)
         function arrayBufferToBase64(buffer) {
-            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            // Convert to base64 and make it URL-safe
+            return btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
         }
         
-        // Helper to convert Base64 to ArrayBuffer
+        // Helper to convert Base64URL to ArrayBuffer
         function base64ToArrayBuffer(base64) {
-            const binary = atob(base64);
+            // Convert from URL-safe base64 to standard base64
+            let standardBase64 = base64
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+            // Add padding if necessary
+            while (standardBase64.length % 4 !== 0) {
+                standardBase64 += '=';
+            }
+            const binary = atob(standardBase64);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) {
                 bytes[i] = binary.charCodeAt(i);

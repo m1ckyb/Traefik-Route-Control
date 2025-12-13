@@ -9,6 +9,7 @@ import argparse
 import urllib3
 import json
 import secrets
+import time
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -519,10 +520,28 @@ else:
     with open(SECRET_KEY_FILE, 'wb') as f:
         f.write(app.secret_key)
 
+# Track application startup time for initial setup window
+STARTUP_TIME = time.time()
+SETUP_WINDOW_SECONDS = 300  # 5 minutes
+
+def is_in_setup_window():
+    """Check if we're still in the 5-minute setup window after startup."""
+    return (time.time() - STARTUP_TIME) < SETUP_WINDOW_SECONDS
+
 # Flask-Login setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Custom unauthorized handler
+@login_manager.unauthorized_handler
+def unauthorized():
+    # During setup window with no users, redirect to login without message
+    if db.count_users() == 0 and is_in_setup_window():
+        return redirect(url_for('login'))
+    # Otherwise show the default message
+    flash('Please log in to access this page.', 'warning')
+    return redirect(url_for('login'))
 
 class User(UserMixin):
     def __init__(self, user_id, username):
@@ -546,7 +565,17 @@ ORIGIN = os.environ.get('ORIGIN', f'http://localhost:5000')
 def login():
     # Check if this is initial setup (no users exist)
     is_setup = db.count_users() == 0
-    return render_template('login.html', is_setup=is_setup)
+    
+    # Check if we're in the setup window
+    in_setup_window = is_in_setup_window() if is_setup else False
+    
+    # If setup required but window expired, show warning
+    setup_expired = is_setup and not in_setup_window
+    
+    return render_template('login.html', 
+                          is_setup=is_setup, 
+                          in_setup_window=in_setup_window,
+                          setup_expired=setup_expired)
 
 @app.route('/logout')
 @login_required
@@ -558,6 +587,10 @@ def logout():
 # WebAuthn routes
 @app.route('/auth/register/begin', methods=['POST'])
 def register_begin():
+    # Only allow registration during setup window if no users exist
+    if db.count_users() == 0 and not is_in_setup_window():
+        return jsonify({"error": "Setup window expired. Please restart the application."}), 403
+    
     data = request.json
     username = data.get('username')
     
@@ -736,8 +769,15 @@ def login_complete():
         return jsonify({"error": str(e)}), 400
 
 @app.route('/')
-@login_required
 def index():
+    # Allow access during setup window if no users exist
+    if db.count_users() == 0 and is_in_setup_window():
+        return redirect(url_for('login'))
+    
+    # Otherwise require login
+    if not current_user.is_authenticated:
+        return login_manager.unauthorized()
+    
     services = db.get_all_services()
     return render_template('index.html', services=services)
 
