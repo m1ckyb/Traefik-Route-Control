@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 import urllib3
+from urllib.parse import urlparse
 import json
 import secrets
 import time
@@ -572,7 +573,7 @@ def get_expected_origin():
     """
     Get the expected origin for WebAuthn operations.
     For development, dynamically determine based on request to support localhost/127.0.0.1/0.0.0.0.
-    For production with RP_ID set, use the configured ORIGIN.
+    For production with ORIGIN set, use the configured ORIGIN.
     """
     # If ORIGIN is explicitly set via environment variable (not default), use it
     if 'ORIGIN' in os.environ:
@@ -601,8 +602,17 @@ def get_expected_rp_id():
     # This supports localhost, 127.0.0.1, etc.
     if has_request_context():
         host = request.host
-        # Remove port if present
-        hostname = host.split(':')[0]
+        # Use urlparse for robust hostname extraction that handles IPv6
+        # request.host includes port, so we need to parse it properly
+        # For IPv6: [::1]:5000 -> ::1
+        # For IPv4: 127.0.0.1:5000 -> 127.0.0.1
+        # For hostname: localhost:5000 -> localhost
+        if host.startswith('['):
+            # IPv6 address with brackets
+            hostname = host.split(']')[0][1:]  # Remove brackets
+        else:
+            # IPv4 or hostname
+            hostname = host.split(':')[0]
         # For development, accept localhost-like addresses
         # WebAuthn treats localhost, 127.0.0.1, and [::1] as secure contexts
         return hostname
@@ -703,7 +713,13 @@ def register_complete():
     origin = session.get('registration_origin')
     
     if not challenge or not username or not rp_id or not origin:
-        return jsonify({"error": "Invalid session"}), 400
+        # Log what's missing for debugging
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not username: missing.append('username')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        return jsonify({"error": f"Missing required session data for registration: {', '.join(missing)}"}), 400
     
     try:
         # Verify the registration response
@@ -802,7 +818,13 @@ def login_complete():
     origin = session.get('authentication_origin')
     
     if not challenge or not user_id or not rp_id or not origin:
-        return jsonify({"error": "Invalid session"}), 400
+        # Log what's missing for debugging
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not user_id: missing.append('user_id')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        return jsonify({"error": f"Missing required session data for authentication: {', '.join(missing)}"}), 400
     
     try:
         # Get credential from database
