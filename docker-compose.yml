@@ -1,0 +1,16 @@
+services:
+  jellyfin-rotator:
+    build: .
+    image: jellyfin-rotator
+    container_name: jellyfin-rotator
+    # Mount the .env file from the host to the container
+    volumes:
+      - ./.env:/app/.env
+    # Expose the port for the API server
+    ports:
+      - "5000:5000"
+    # Use host networking so the script can access a local Redis instance easily.
+    # If Redis is on a different server, you can remove this line.
+    #network_mode: host
+    # Default command to run the API server
+    command: serve
