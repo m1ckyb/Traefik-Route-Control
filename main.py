@@ -522,7 +522,15 @@ else:
 
 # Track application startup time for initial setup window
 STARTUP_TIME = time.time()
-SETUP_WINDOW_SECONDS = int(os.environ.get('SETUP_WINDOW_SECONDS', '300'))  # Default 5 minutes
+# Parse and validate SETUP_WINDOW_SECONDS (default 5 minutes, min 60s, max 1 hour)
+try:
+    SETUP_WINDOW_SECONDS = int(os.environ.get('SETUP_WINDOW_SECONDS', '300'))
+    if SETUP_WINDOW_SECONDS < 60 or SETUP_WINDOW_SECONDS > 3600:
+        print(f"⚠️ SETUP_WINDOW_SECONDS={SETUP_WINDOW_SECONDS} is outside recommended range (60-3600). Using default 300.")
+        SETUP_WINDOW_SECONDS = 300
+except ValueError:
+    print(f"⚠️ Invalid SETUP_WINDOW_SECONDS value. Using default 300.")
+    SETUP_WINDOW_SECONDS = 300
 
 def is_in_setup_window():
     """Check if we're still in the setup window after startup."""
