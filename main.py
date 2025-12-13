@@ -713,13 +713,15 @@ def register_complete():
     origin = session.get('registration_origin')
     
     if not challenge or not username or not rp_id or not origin:
-        # Log what's missing for debugging
+        # Log what's missing for debugging (server-side only)
         missing = []
         if not challenge: missing.append('challenge')
         if not username: missing.append('username')
         if not rp_id: missing.append('rp_id')
         if not origin: missing.append('origin')
-        return jsonify({"error": f"Missing required session data for registration: {', '.join(missing)}"}), 400
+        print(f"⚠️ Registration failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
         # Verify the registration response
@@ -818,13 +820,15 @@ def login_complete():
     origin = session.get('authentication_origin')
     
     if not challenge or not user_id or not rp_id or not origin:
-        # Log what's missing for debugging
+        # Log what's missing for debugging (server-side only)
         missing = []
         if not challenge: missing.append('challenge')
         if not user_id: missing.append('user_id')
         if not rp_id: missing.append('rp_id')
         if not origin: missing.append('origin')
-        return jsonify({"error": f"Missing required session data for authentication: {', '.join(missing)}"}), 400
+        print(f"⚠️ Authentication failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
         # Get credential from database
