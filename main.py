@@ -132,18 +132,21 @@ def cf_request(method, endpoint, data=None):
         return None
     return response.json()
 
-def update_hass(state, service_name="Service"):
+def update_hass(state, service_name="Service", hass_entity_id=None):
     hass_url = get_setting("HASS_URL", required=False)
-    hass_entity = get_setting("HASS_ENTITY_ID", required=False)
     hass_token = get_setting("HASS_TOKEN", required=False)
     
-    if not hass_url or not hass_entity or not hass_token:
+    # Use provided entity ID or fall back to global setting (for backward compatibility)
+    if not hass_entity_id:
+        hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
+    
+    if not hass_url or not hass_entity_id or not hass_token:
         return  # HA integration disabled
     
     headers = {"Authorization": f"Bearer {hass_token}", "Content-Type": "application/json"}
     try:
         response = requests.post(
-            f"{hass_url}/api/states/{hass_entity}",
+            f"{hass_url}/api/states/{hass_entity_id}",
             headers=headers,
             json={"state": state, "attributes": {"service": service_name}},
             timeout=5
@@ -363,7 +366,7 @@ def turn_off_service(service_id):
             print("   No DNS records found to clean.")
 
     print("🔹 Updating Home Assistant...")
-    update_hass("Disabled", service['name'])
+    update_hass("Disabled", service['name'], service.get('hass_entity_id'))
     
     # Update database
     db.update_service_status(service_id, False, None)
@@ -445,7 +448,7 @@ def turn_on_service(service_id):
     r.set(f"traefik/http/services/{service_name}/loadbalancer/servers/0/url", target_url)
 
     print("🔹 Updating Home Assistant...")
-    update_hass(f"https://{full_hostname}", service['name'])
+    update_hass(f"https://{full_hostname}", service['name'], service.get('hass_entity_id'))
     
     # Update database
     db.update_service_status(service_id, True, full_hostname)
@@ -501,7 +504,8 @@ def new_service():
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
-                subdomain_prefix=request.form['subdomain_prefix']
+                subdomain_prefix=request.form['subdomain_prefix'],
+                hass_entity_id=request.form.get('hass_entity_id') or None
             )
             flash('Service added successfully!', 'success')
             return redirect(url_for('index'))
@@ -525,7 +529,8 @@ def edit_service(service_id):
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
-                subdomain_prefix=request.form['subdomain_prefix']
+                subdomain_prefix=request.form['subdomain_prefix'],
+                hass_entity_id=request.form.get('hass_entity_id') or None
             )
             flash('Service updated successfully!', 'success')
             return redirect(url_for('index'))

@@ -67,10 +67,11 @@
         </div>
         
         <div class="form-group">
-            <label for="HASS_ENTITY_ID">Home Assistant Entity ID</label>
+            <label for="HASS_ENTITY_ID">Home Assistant Entity ID (Global Fallback)</label>
             <input type="text" id="HASS_ENTITY_ID" name="HASS_ENTITY_ID" 
                    value="{{ settings.get('HASS_ENTITY_ID', '') }}"
                    placeholder="input_text.service_url">
+            <small>Global entity ID used if a service doesn't have its own. You can set per-service entity IDs when adding/editing services.</small>
         </div>
         
         <div class="form-group">
