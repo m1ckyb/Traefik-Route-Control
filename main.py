@@ -80,15 +80,21 @@ def cf_request(method, endpoint, data=None):
 def update_hass(state):
     headers = {"Authorization": f"Bearer {HASS_TOKEN}", "Content-Type": "application/json"}
     try:
-        requests.post(
+        response = requests.post(
             f"{HASS_URL}/api/states/{HASS_ENTITY_ID}",
             headers=headers,
             json={"state": state},
             timeout=5
         )
-        print(f"   Home Assistant updated: {state}")
+        
+        # Check if the update actually succeeded (200 OK or 201 Created)
+        if response.status_code in [200, 201]:
+            print(f"   Home Assistant updated: {state}")
+        else:
+            print(f"❌ Failed to update HA (Status {response.status_code}): {response.text}")
+
     except Exception as e:
-        print(f"   Failed to update HA: {e}")
+        print(f"❌ Connection Failed: {e}")
 
 # ================= CORE LOGIC =================
 def get_status():
