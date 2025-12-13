@@ -7,8 +7,26 @@ import os
 import sys
 import argparse
 import urllib3
+import json
+import secrets
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from webauthn import (
+    generate_registration_options,
+    verify_registration_response,
+    generate_authentication_options,
+    verify_authentication_response,
+    options_to_json,
+)
+from webauthn.helpers.structs import (
+    PublicKeyCredentialDescriptor,
+    AuthenticatorSelectionCriteria,
+    UserVerificationRequirement,
+    AuthenticatorAttachment,
+    ResidentKeyRequirement,
+)
+from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
 
 # Suppress InsecureRequestWarning for UniFi self-signed certs
@@ -489,13 +507,225 @@ def cmd_on():
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, user_id, username):
+        self.id = user_id
+        self.username = username
+
+@login_manager.user_loader
+def load_user(user_id):
+    user = db.get_user(int(user_id))
+    if user:
+        return User(user['id'], user['username'])
+    return None
+
+# RP (Relying Party) settings for WebAuthn
+RP_ID = os.environ.get('RP_ID', 'localhost')
+RP_NAME = "Traefik Route Control"
+ORIGIN = os.environ.get('ORIGIN', f'http://localhost:5000')
+
 # Web UI Routes
+@app.route('/login', methods=['GET'])
+def login():
+    # Check if this is initial setup (no users exist)
+    is_setup = db.count_users() == 0
+    return render_template('login.html', is_setup=is_setup)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('login'))
+
+# WebAuthn routes
+@app.route('/auth/register/begin', methods=['POST'])
+def register_begin():
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    
+    # Check if user already exists
+    existing_user = db.get_user_by_username(username)
+    if existing_user:
+        return jsonify({"error": "Username already exists"}), 400
+    
+    # Create user
+    user_id = db.add_user(username)
+    user_id_bytes = user_id.to_bytes(4, byteorder='big')
+    
+    # Generate registration options
+    registration_options = generate_registration_options(
+        rp_id=RP_ID,
+        rp_name=RP_NAME,
+        user_id=user_id_bytes,
+        user_name=username,
+        user_display_name=username,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
+            resident_key=ResidentKeyRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.PREFERRED
+        ),
+        supported_pub_key_algs=[
+            COSEAlgorithmIdentifier.ECDSA_SHA_256,
+            COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
+        ]
+    )
+    
+    # Store challenge in session
+    session['registration_challenge'] = registration_options.challenge.hex()
+    session['registration_user_id'] = user_id
+    
+    # Convert to JSON-serializable format
+    options_json = options_to_json(registration_options)
+    return jsonify(json.loads(options_json))
+
+@app.route('/auth/register/complete', methods=['POST'])
+def register_complete():
+    data = request.json
+    credential = data.get('credential')
+    
+    if not credential:
+        return jsonify({"error": "Credential required"}), 400
+    
+    challenge = session.get('registration_challenge')
+    user_id = session.get('registration_user_id')
+    
+    if not challenge or not user_id:
+        return jsonify({"error": "Invalid session"}), 400
+    
+    try:
+        # Verify the registration response
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=bytes.fromhex(challenge),
+            expected_rp_id=RP_ID,
+            expected_origin=ORIGIN,
+        )
+        
+        # Store credential
+        db.add_credential(
+            user_id=user_id,
+            credential_id=verification.credential_id.hex(),
+            public_key=verification.credential_public_key.hex()
+        )
+        
+        # Log the user in
+        user = db.get_user(user_id)
+        login_user(User(user['id'], user['username']))
+        
+        # Clear session
+        session.pop('registration_challenge', None)
+        session.pop('registration_user_id', None)
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        # Clean up user if registration failed
+        db.delete_user(user_id)
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/auth/login/begin', methods=['POST'])
+def login_begin():
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    
+    # Check if user exists
+    user = db.get_user_by_username(username)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Get user credentials
+    credentials = db.get_credentials_for_user(user['id'])
+    if not credentials:
+        return jsonify({"error": "No credentials found"}), 404
+    
+    # Generate authentication options
+    allow_credentials = [
+        PublicKeyCredentialDescriptor(id=bytes.fromhex(cred['credential_id']))
+        for cred in credentials
+    ]
+    
+    authentication_options = generate_authentication_options(
+        rp_id=RP_ID,
+        allow_credentials=allow_credentials,
+        user_verification=UserVerificationRequirement.PREFERRED
+    )
+    
+    # Store challenge in session
+    session['authentication_challenge'] = authentication_options.challenge.hex()
+    session['authentication_user_id'] = user['id']
+    
+    # Convert to JSON-serializable format
+    options_json = options_to_json(authentication_options)
+    return jsonify(json.loads(options_json))
+
+@app.route('/auth/login/complete', methods=['POST'])
+def login_complete():
+    data = request.json
+    credential = data.get('credential')
+    
+    if not credential:
+        return jsonify({"error": "Credential required"}), 400
+    
+    challenge = session.get('authentication_challenge')
+    user_id = session.get('authentication_user_id')
+    
+    if not challenge or not user_id:
+        return jsonify({"error": "Invalid session"}), 400
+    
+    try:
+        # Get credential from database
+        cred_id = credential.get('id')
+        db_credential = db.get_credential_by_id(cred_id)
+        
+        if not db_credential or db_credential['user_id'] != user_id:
+            return jsonify({"error": "Invalid credential"}), 400
+        
+        # Verify the authentication response
+        verification = verify_authentication_response(
+            credential=credential,
+            expected_challenge=bytes.fromhex(challenge),
+            expected_rp_id=RP_ID,
+            expected_origin=ORIGIN,
+            credential_public_key=bytes.fromhex(db_credential['public_key']),
+            credential_current_sign_count=db_credential['sign_count']
+        )
+        
+        # Update sign count
+        db.update_credential_sign_count(cred_id, verification.new_sign_count)
+        
+        # Log the user in
+        user = db.get_user(user_id)
+        login_user(User(user['id'], user['username']))
+        
+        # Clear session
+        session.pop('authentication_challenge', None)
+        session.pop('authentication_user_id', None)
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route('/')
+@login_required
 def index():
     services = db.get_all_services()
     return render_template('index.html', services=services)
 
 @app.route('/services/new', methods=['GET', 'POST'])
+@login_required
 def new_service():
     if request.method == 'POST':
         try:
@@ -515,6 +745,7 @@ def new_service():
     return render_template('service_form.html', service=None)
 
 @app.route('/services/<int:service_id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_service(service_id):
     service = db.get_service(service_id)
     if not service:
@@ -540,6 +771,7 @@ def edit_service(service_id):
     return render_template('service_form.html', service=service)
 
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
     if request.method == 'POST':
         try:
@@ -556,10 +788,12 @@ def settings():
 
 # API Routes
 @app.route('/api/status', methods=['GET'])
+@login_required
 def api_status():
     return jsonify(get_status())
 
 @app.route('/api/firewall-status', methods=['GET'])
+@login_required
 def api_firewall_status():
     firewall_status = "UNKNOWN"
     is_open = check_unifi_rule()
@@ -570,6 +804,7 @@ def api_firewall_status():
     return jsonify({"status": firewall_status})
 
 @app.route('/api/services/<int:service_id>/on', methods=['POST'])
+@login_required
 def api_turn_on(service_id):
     result = turn_on_service(service_id)
     if "error" in result:
@@ -577,6 +812,7 @@ def api_turn_on(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/off', methods=['POST'])
+@login_required
 def api_turn_off(service_id):
     result = turn_off_service(service_id)
     if "error" in result:
@@ -584,6 +820,7 @@ def api_turn_off(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/rotate', methods=['POST'])
+@login_required
 def api_rotate(service_id):
     result = rotate_service(service_id)
     if "error" in result:
@@ -591,6 +828,7 @@ def api_rotate(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
+@login_required
 def api_delete_service(service_id):
     service = db.get_service(service_id)
     if not service:
@@ -605,6 +843,7 @@ def api_delete_service(service_id):
 
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
+@login_required
 def api_legacy_turn_on():
     services = db.get_all_services()
     if not services:
@@ -615,6 +854,7 @@ def api_legacy_turn_on():
     return jsonify(result)
 
 @app.route('/api/turn_off', methods=['POST'])
+@login_required
 def api_legacy_turn_off():
     services = db.get_all_services()
     if not services:
