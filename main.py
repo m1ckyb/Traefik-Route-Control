@@ -522,10 +522,10 @@ else:
 
 # Track application startup time for initial setup window
 STARTUP_TIME = time.time()
-SETUP_WINDOW_SECONDS = 300  # 5 minutes
+SETUP_WINDOW_SECONDS = int(os.environ.get('SETUP_WINDOW_SECONDS', '300'))  # Default 5 minutes
 
 def is_in_setup_window():
-    """Check if we're still in the 5-minute setup window after startup."""
+    """Check if we're still in the setup window after startup."""
     return (time.time() - STARTUP_TIME) < SETUP_WINDOW_SECONDS
 
 # Flask-Login setup
@@ -589,7 +589,7 @@ def logout():
 def register_begin():
     # Only allow registration during setup window if no users exist
     if db.count_users() == 0 and not is_in_setup_window():
-        return jsonify({"error": "Setup window expired. Please restart the application."}), 403
+        return jsonify({"error": "Setup window expired. Please restart the application."}), 410
     
     data = request.json
     username = data.get('username')

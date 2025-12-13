@@ -67,10 +67,11 @@
         // Helper to convert ArrayBuffer to Base64URL (URL-safe)
         function arrayBufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
-            let binary = '';
+            const chars = [];
             for (let i = 0; i < bytes.length; i++) {
-                binary += String.fromCharCode(bytes[i]);
+                chars.push(String.fromCharCode(bytes[i]));
             }
+            const binary = chars.join('');
             // Convert to base64 and make it URL-safe
             return btoa(binary)
                 .replace(/\+/g, '-')
