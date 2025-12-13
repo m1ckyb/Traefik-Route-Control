@@ -1,12 +1,13 @@
 services:
   jellyfin-rotator:
     image: ghcr.io/m1ckyb/jellyfin_traefik_control:main
-    # Mount the .env file from the host to the container
+    # Volume for persistent database storage
     volumes:
-      - ./.env:/app/.env
-    # Expose the port for the API server
+      - ./data:/app/data
+    # Expose the port for the web UI and API
     ports:
       - "5000:5000"
     # Use host networking so the script can access a local Redis instance easily.
     # If Redis is on a different server, you can remove this line.
     pull_policy: always
+    restart: unless-stopped

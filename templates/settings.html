@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Traefik Route Control{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2>Global Settings</h2>
+    
+    <form method="POST" class="settings-form">
+        <h3>Cloudflare Settings</h3>
+        
+        <div class="form-group">
+            <label for="CF_API_TOKEN">Cloudflare API Token</label>
+            <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                   value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+            <label for="CF_ZONE_ID">Cloudflare Zone ID</label>
+            <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                   value="{{ settings.get('CF_ZONE_ID', '') }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="DOMAIN_ROOT">Domain Root</label>
+            <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                   value="{{ settings.get('DOMAIN_ROOT', '') }}"
+                   placeholder="example.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="ORIGIN_RULE_NAME">Origin Rule Name</label>
+            <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                   value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
+                   placeholder="Service Rotation">
+        </div>
+        
+        <h3>Traefik / Redis Settings</h3>
+        
+        <div class="form-group">
+            <label for="REDIS_HOST">Redis Host</label>
+            <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                   value="{{ settings.get('REDIS_HOST', '') }}"
+                   placeholder="127.0.0.1">
+        </div>
+        
+        <div class="form-group">
+            <label for="REDIS_PORT">Redis Port</label>
+            <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                   value="{{ settings.get('REDIS_PORT', '6379') }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="REDIS_PASS">Redis Password (optional)</label>
+            <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                   value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
+        </div>
+        
+        <h3>Home Assistant Settings</h3>
+        
+        <div class="form-group">
+            <label for="HASS_URL">Home Assistant URL</label>
+            <input type="text" id="HASS_URL" name="HASS_URL" 
+                   value="{{ settings.get('HASS_URL', '') }}"
+                   placeholder="http://homeassistant.local:8123">
+            <small>Leave empty to disable Home Assistant integration</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="HASS_ENTITY_ID">Home Assistant Entity ID</label>
+            <input type="text" id="HASS_ENTITY_ID" name="HASS_ENTITY_ID" 
+                   value="{{ settings.get('HASS_ENTITY_ID', '') }}"
+                   placeholder="input_text.service_url">
+        </div>
+        
+        <div class="form-group">
+            <label for="HASS_TOKEN">Home Assistant Token</label>
+            <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
+                   value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off">
+        </div>
+        
+        <h3>UniFi Controller Settings</h3>
+        
+        <div class="form-group">
+            <label for="UNIFI_HOST">UniFi Host</label>
+            <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" required 
+                   value="{{ settings.get('UNIFI_HOST', '') }}"
+                   placeholder="192.168.1.1">
+        </div>
+        
+        <div class="form-group">
+            <label for="UNIFI_USER">UniFi Username</label>
+            <input type="text" id="UNIFI_USER" name="UNIFI_USER" required 
+                   value="{{ settings.get('UNIFI_USER', '') }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="UNIFI_PASS">UniFi Password</label>
+            <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" required 
+                   value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+            <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name</label>
+            <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" required 
+                   value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
+                   placeholder="External">
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Save Settings</button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

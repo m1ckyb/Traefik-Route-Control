@@ -13,8 +13,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the main script
+# Copy the application files
 COPY main.py .
+COPY database.py .
+COPY templates templates/
+COPY static static/
+
+# Create volume mount point for persistent database
+VOLUME /app/data
 
 # Run the application with Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
