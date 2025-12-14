@@ -198,10 +198,15 @@ def generate_random_port():
     """
     Generate a random port between 1024 and 65535, avoiding known assigned ports.
     Returns a port number that is not in the RESERVED_PORTS set.
+    
+    Note: With ~63,000 available ports (64,535 total - 1,184 reserved), the random
+    selection approach is efficient. Even with 100 services running, we have a 
+    >99.9% chance of finding a port in the first 1000 attempts.
     """
     # Get active ports once to avoid repeated database queries
     services = db.get_all_services()
-    ports_in_use = {s.get('current_port') for s in services if s.get('enabled') and s.get('current_port')}
+    ports_in_use = {s.get('current_port') for s in services 
+                    if s.get('enabled') and s.get('current_port') is not None}
     
     max_attempts = 1000
     for _ in range(max_attempts):
