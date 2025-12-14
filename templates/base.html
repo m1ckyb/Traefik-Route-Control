@@ -10,10 +10,18 @@
     <nav class="navbar">
         <div class="container">
             <h1>🚦 Traefik Route Control</h1>
-            <div class="nav-links">
-                <a href="/">Services</a>
-                <a href="/settings">Settings</a>
-                <a href="/logout">Logout</a>
+            <div class="nav-right">
+                <div class="nav-status">
+                    <span class="status-label">Firewall:</span>
+                    <span class="status-badge" id="nav-firewall-status">
+                        <span class="loading">Checking...</span>
+                    </span>
+                </div>
+                <div class="nav-links">
+                    <a href="/">Services</a>
+                    <a href="/settings">Settings</a>
+                    <a href="/logout">Logout</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -31,5 +39,21 @@
     </main>
     
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+    // Load firewall status in navbar if element exists
+    const navFirewallStatus = document.getElementById('nav-firewall-status');
+    if (navFirewallStatus) {
+        fetch('/api/firewall-status')
+            .then(r => r.json())
+            .then(data => {
+                navFirewallStatus.innerHTML = `${data.status}`;
+                navFirewallStatus.className = `status-badge status-${data.status.toLowerCase()}`;
+            })
+            .catch(err => {
+                navFirewallStatus.innerHTML = 'ERROR';
+                navFirewallStatus.className = 'status-badge status-unknown';
+            });
+    }
+    </script>
 </body>
 </html>
