@@ -115,8 +115,8 @@ def get_setting(key, required=True):
     
     Args:
         key: The setting key to retrieve
-        required: Hint for documentation (no longer enforced). 
-                 Validation happens at point of use.
+        required: Documentation hint only (no longer enforced at startup).
+                  Validation happens at point of use.
     
     Returns:
         The setting value or None if not found
