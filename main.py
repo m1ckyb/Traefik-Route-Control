@@ -928,7 +928,8 @@ def index():
         return redirect(url_for('onboarding'))
     
     services = db.get_all_services()
-    return render_template('index.html', services=services)
+    settings = db.get_all_settings()
+    return render_template('index.html', services=services, settings=settings)
 
 @app.route('/onboarding', methods=['GET'])
 @login_required

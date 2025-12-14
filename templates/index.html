@@ -12,9 +12,14 @@
     <div class="service-card" data-service-id="{{ service.id }}">
         <div class="service-header">
             <h3>{{ service.name }}</h3>
-            <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
-                {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
-            </span>
+            <div class="service-header-right">
+                <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
+                    {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
+                </span>
+                <button class="btn-icon" onclick="showHassModal({{ service.id }}, event)" title="Home Assistant Settings">
+                    ⚙️
+                </button>
+            </div>
         </div>
         
         <div class="service-info">
@@ -36,6 +41,10 @@
                 <a href="https://{{ service.current_hostname }}" target="_blank" class="url-link">
                     https://{{ service.current_hostname }}
                 </a>
+            </div>
+            <div class="info-row">
+                <strong>Regex Pattern:</strong>
+                <code class="regex-pattern" onclick="copyToClipboard(this.textContent, event)" title="Click to copy">^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$</code>
             </div>
             {% endif %}
         </div>
@@ -68,23 +77,21 @@
 </div>
 {% endif %}
 
-<div class="firewall-status">
-    <h3>Firewall Status</h3>
-    <div class="status-indicator" id="firewall-status">
-        <span class="loading">Checking...</span>
+<!-- Home Assistant Settings Modal -->
+<div id="hassModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Home Assistant Settings</h3>
+            <span class="modal-close" onclick="closeHassModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="modal-info">Here's the configuration for Home Assistant to control this service:</p>
+            <div class="code-block">
+                <pre id="hassConfig"></pre>
+            </div>
+            <button class="btn btn-secondary" onclick="copyHassConfig()">📋 Copy to Clipboard</button>
+        </div>
     </div>
 </div>
 
-<script>
-// Load firewall status
-fetch('/api/firewall-status')
-    .then(r => r.json())
-    .then(data => {
-        const el = document.getElementById('firewall-status');
-        el.innerHTML = `<span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span>`;
-    })
-    .catch(err => {
-        document.getElementById('firewall-status').innerHTML = '<span class="error">Error loading status</span>';
-    });
-</script>
 {% endblock %}

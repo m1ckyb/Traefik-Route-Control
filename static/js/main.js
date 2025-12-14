@@ -95,3 +95,61 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     });
 });
+
+// Home Assistant Modal functions
+function showHassModal(serviceId, event) {
+    event.preventDefault();
+    
+    // Get the service card to extract information
+    const serviceCard = document.querySelector(`[data-service-id="${serviceId}"]`);
+    const serviceName = serviceCard.querySelector('h3').textContent;
+    const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_');
+    
+    // Get the base URL from window location
+    const baseUrl = window.location.origin;
+    
+    // Generate the Home Assistant YAML configuration
+    const hassConfig = `switch:
+  - platform: command_line
+    switches:
+      traefik_${serviceNameSlug}:
+        command_on: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/on"
+        command_off: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/off"
+        command_state: "curl -s ${baseUrl}/api/status"
+        value_template: "{{ value_json.active_services | selectattr('id', 'equalto', ${serviceId}) | list | length > 0 }}"
+        friendly_name: "Traefik ${serviceName}"`;
+    
+    document.getElementById('hassConfig').textContent = hassConfig;
+    document.getElementById('hassModal').style.display = 'block';
+}
+
+function closeHassModal() {
+    document.getElementById('hassModal').style.display = 'none';
+}
+
+function copyHassConfig() {
+    const config = document.getElementById('hassConfig').textContent;
+    navigator.clipboard.writeText(config).then(() => {
+        alert('Configuration copied to clipboard!');
+    }).catch(err => {
+        alert('Failed to copy: ' + err);
+    });
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('hassModal');
+    if (event.target === modal) {
+        closeHassModal();
+    }
+}
+
+// Copy to clipboard function for regex pattern
+function copyToClipboard(text, event) {
+    event.preventDefault();
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Regex pattern copied to clipboard!');
+    }).catch(err => {
+        alert('Failed to copy: ' + err);
+    });
+}
