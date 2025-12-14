@@ -47,8 +47,18 @@
         fetch('/api/firewall-status')
             .then(r => r.json())
             .then(data => {
-                navFirewallStatus.innerHTML = `${data.status}`;
-                navFirewallStatus.className = `status-badge status-${data.status.toLowerCase()}`;
+                let statusText = data.status;
+                let statusClass = `status-badge status-${data.status.toLowerCase()}`;
+                
+                // If firewall is open and port is available, show the port
+                if (data.status === 'OPEN' && data.port != null) {
+                    statusText = data.port;
+                } else if (data.status === 'CLOSED') {
+                    statusText = 'Closed';
+                }
+                
+                navFirewallStatus.innerHTML = statusText;
+                navFirewallStatus.className = statusClass;
             })
             .catch(err => {
                 navFirewallStatus.innerHTML = 'ERROR';
