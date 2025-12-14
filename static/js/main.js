@@ -94,15 +94,46 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => alert.remove(), 300);
         }, 5000);
     });
+    
+    // Attach event listeners to HA settings buttons
+    document.querySelectorAll('.btn-icon[data-service-id]').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            showHassModal(this.dataset.serviceId, this.dataset.serviceName);
+        });
+    });
+    
+    // Attach event listeners to regex patterns
+    document.querySelectorAll('.regex-pattern[data-regex]').forEach(element => {
+        element.addEventListener('click', function(event) {
+            event.preventDefault();
+            copyToClipboard(this.dataset.regex, 'Regex pattern copied to clipboard!');
+        });
+    });
 });
 
-// Home Assistant Modal functions
-function showHassModal(serviceId, event) {
-    event.preventDefault();
+// Show temporary notification
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type}`;
+    notification.textContent = message;
+    notification.style.position = 'fixed';
+    notification.style.top = '20px';
+    notification.style.right = '20px';
+    notification.style.zIndex = '10000';
+    notification.style.minWidth = '250px';
+    notification.style.animation = 'slideIn 0.3s ease-out';
     
-    // Get the service card to extract information
-    const serviceCard = document.querySelector(`[data-service-id="${serviceId}"]`);
-    const serviceName = serviceCard.querySelector('h3').textContent;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Home Assistant Modal functions
+function showHassModal(serviceId, serviceName) {
     const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_');
     
     // Get the base URL from window location
@@ -129,27 +160,22 @@ function closeHassModal() {
 
 function copyHassConfig() {
     const config = document.getElementById('hassConfig').textContent;
-    navigator.clipboard.writeText(config).then(() => {
-        alert('Configuration copied to clipboard!');
-    }).catch(err => {
-        alert('Failed to copy: ' + err);
-    });
+    copyToClipboard(config, 'Configuration copied to clipboard!');
 }
 
 // Close modal when clicking outside
-window.onclick = function(event) {
+window.addEventListener('click', function(event) {
     const modal = document.getElementById('hassModal');
     if (event.target === modal) {
         closeHassModal();
     }
-}
+});
 
-// Copy to clipboard function for regex pattern
-function copyToClipboard(text, event) {
-    event.preventDefault();
+// Copy to clipboard function
+function copyToClipboard(text, successMessage) {
     navigator.clipboard.writeText(text).then(() => {
-        alert('Regex pattern copied to clipboard!');
+        showNotification(successMessage, 'success');
     }).catch(err => {
-        alert('Failed to copy: ' + err);
+        showNotification('Failed to copy: ' + err, 'error');
     });
 }

@@ -16,7 +16,7 @@
                 <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
                     {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
                 </span>
-                <button class="btn-icon" onclick="showHassModal({{ service.id }}, event)" title="Home Assistant Settings">
+                <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
                     ⚙️
                 </button>
             </div>
@@ -44,7 +44,7 @@
             </div>
             <div class="info-row">
                 <strong>Regex Pattern:</strong>
-                <code class="regex-pattern" onclick="copyToClipboard(this.textContent, event)" title="Click to copy">^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$</code>
+                <code class="regex-pattern" data-regex="^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$" title="Click to copy">^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$</code>
             </div>
             {% endif %}
         </div>
