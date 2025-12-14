@@ -7,11 +7,12 @@ import os
 import sys
 import argparse
 import urllib3
+from urllib.parse import urlparse
 import json
 import secrets
 import time
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from webauthn import (
     generate_registration_options,
@@ -568,6 +569,57 @@ RP_ID = os.environ.get('RP_ID', 'localhost')
 RP_NAME = "Traefik Route Control"
 ORIGIN = os.environ.get('ORIGIN', f'http://localhost:5000')
 
+def get_expected_origin():
+    """
+    Get the expected origin for WebAuthn operations.
+    For development, dynamically determine based on request to support localhost/127.0.0.1/0.0.0.0.
+    For production with ORIGIN set, use the configured ORIGIN.
+    """
+    # If ORIGIN is explicitly set via environment variable (not default), use it
+    if 'ORIGIN' in os.environ:
+        return ORIGIN
+    
+    # For development (default config), dynamically determine origin from request
+    # This allows localhost, 127.0.0.1, and other local addresses to work
+    if has_request_context():
+        scheme = request.scheme  # http or https
+        host = request.host      # includes hostname and port
+        return f"{scheme}://{host}"
+    
+    # Fallback to configured ORIGIN
+    return ORIGIN
+
+def get_expected_rp_id():
+    """
+    Get the expected RP ID for WebAuthn operations.
+    For development with localhost-like addresses, use the hostname without port.
+    """
+    # If RP_ID is explicitly set via environment variable (not default), use it
+    if 'RP_ID' in os.environ:
+        return RP_ID
+    
+    # For development (default config), extract hostname from request
+    # This supports localhost, 127.0.0.1, etc.
+    if has_request_context():
+        host = request.host
+        # Use urlparse for robust hostname extraction that handles IPv6
+        # request.host includes port, so we need to parse it properly
+        # For IPv6: [::1]:5000 -> ::1
+        # For IPv4: 127.0.0.1:5000 -> 127.0.0.1
+        # For hostname: localhost:5000 -> localhost
+        if host.startswith('['):
+            # IPv6 address with brackets
+            hostname = host.split(']')[0][1:]  # Remove brackets
+        else:
+            # IPv4 or hostname
+            hostname = host.split(':')[0]
+        # For development, accept localhost-like addresses
+        # WebAuthn treats localhost, 127.0.0.1, and [::1] as secure contexts
+        return hostname
+    
+    # Fallback to configured RP_ID
+    return RP_ID
+
 # Web UI Routes
 @app.route('/login', methods=['GET'])
 def login():
@@ -615,9 +667,13 @@ def register_begin():
     temp_user_id = random.randint(1000000, 9999999)
     user_id_bytes = temp_user_id.to_bytes(4, byteorder='big')
     
+    # Get dynamic RP_ID and origin for this request
+    rp_id = get_expected_rp_id()
+    origin = get_expected_origin()
+    
     # Generate registration options
     registration_options = generate_registration_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         rp_name=RP_NAME,
         user_id=user_id_bytes,
         user_name=username,
@@ -633,9 +689,11 @@ def register_begin():
         ]
     )
     
-    # Store challenge and username in session
+    # Store challenge, username, and context in session for verification
     session['registration_challenge'] = registration_options.challenge.hex()
     session['registration_username'] = username
+    session['registration_rp_id'] = rp_id
+    session['registration_origin'] = origin
     
     # Convert to JSON-serializable format
     options_json = options_to_json(registration_options)
@@ -651,17 +709,27 @@ def register_complete():
     
     challenge = session.get('registration_challenge')
     username = session.get('registration_username')
+    rp_id = session.get('registration_rp_id')
+    origin = session.get('registration_origin')
     
-    if not challenge or not username:
-        return jsonify({"error": "Invalid session"}), 400
+    if not challenge or not username or not rp_id or not origin:
+        # Log what's missing for debugging (server-side only)
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not username: missing.append('username')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        print(f"⚠️ Registration failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
         # Verify the registration response
         verification = verify_registration_response(
             credential=credential,
             expected_challenge=bytes.fromhex(challenge),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
         )
         
         # Create user only after successful verification
@@ -681,6 +749,8 @@ def register_complete():
         # Clear session
         session.pop('registration_challenge', None)
         session.pop('registration_username', None)
+        session.pop('registration_rp_id', None)
+        session.pop('registration_origin', None)
         
         return jsonify({"success": True})
         
@@ -688,6 +758,8 @@ def register_complete():
         # Clear session on error
         session.pop('registration_challenge', None)
         session.pop('registration_username', None)
+        session.pop('registration_rp_id', None)
+        session.pop('registration_origin', None)
         return jsonify({"error": str(e)}), 400
 
 @app.route('/auth/login/begin', methods=['POST'])
@@ -708,6 +780,10 @@ def login_begin():
     if not credentials:
         return jsonify({"error": "No credentials found"}), 404
     
+    # Get dynamic RP_ID and origin for this request
+    rp_id = get_expected_rp_id()
+    origin = get_expected_origin()
+    
     # Generate authentication options
     allow_credentials = [
         PublicKeyCredentialDescriptor(id=bytes.fromhex(cred['credential_id']))
@@ -715,14 +791,16 @@ def login_begin():
     ]
     
     authentication_options = generate_authentication_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         allow_credentials=allow_credentials,
         user_verification=UserVerificationRequirement.PREFERRED
     )
     
-    # Store challenge in session
+    # Store challenge, user_id, and context in session for verification
     session['authentication_challenge'] = authentication_options.challenge.hex()
     session['authentication_user_id'] = user['id']
+    session['authentication_rp_id'] = rp_id
+    session['authentication_origin'] = origin
     
     # Convert to JSON-serializable format
     options_json = options_to_json(authentication_options)
@@ -738,9 +816,19 @@ def login_complete():
     
     challenge = session.get('authentication_challenge')
     user_id = session.get('authentication_user_id')
+    rp_id = session.get('authentication_rp_id')
+    origin = session.get('authentication_origin')
     
-    if not challenge or not user_id:
-        return jsonify({"error": "Invalid session"}), 400
+    if not challenge or not user_id or not rp_id or not origin:
+        # Log what's missing for debugging (server-side only)
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not user_id: missing.append('user_id')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        print(f"⚠️ Authentication failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
         # Get credential from database
@@ -754,8 +842,8 @@ def login_complete():
         verification = verify_authentication_response(
             credential=credential,
             expected_challenge=bytes.fromhex(challenge),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             credential_public_key=bytes.fromhex(db_credential['public_key']),
             credential_current_sign_count=db_credential['sign_count']
         )
@@ -770,10 +858,17 @@ def login_complete():
         # Clear session
         session.pop('authentication_challenge', None)
         session.pop('authentication_user_id', None)
+        session.pop('authentication_rp_id', None)
+        session.pop('authentication_origin', None)
         
         return jsonify({"success": True})
         
     except Exception as e:
+        # Clear session on error
+        session.pop('authentication_challenge', None)
+        session.pop('authentication_user_id', None)
+        session.pop('authentication_rp_id', None)
+        session.pop('authentication_origin', None)
         return jsonify({"error": str(e)}), 400
 
 @app.route('/')
