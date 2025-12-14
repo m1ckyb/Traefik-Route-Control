@@ -146,13 +146,18 @@ function showNotification(message, type = 'success') {
 
 // Home Assistant Modal functions
 function showHassModal(serviceId, serviceName) {
-    const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_');
+    // Sanitize service name for YAML - remove special characters and normalize spaces
+    const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const safeServiceName = serviceName.replace(/['"]/g, ''); // Remove quotes from display name
     
     // Get the base URL from window location
     const baseUrl = window.location.origin;
     
     // Generate the Home Assistant YAML configuration
-    // Note: serviceId is used as a number in the Jinja2 template filter
+    // Build the Jinja2 template string by concatenating parts to avoid template literal interpretation
+    const jinjaOpen = '{{';
+    const jinjaClose = '}}';
+    
     const hassConfig = `switch:
   - platform: command_line
     switches:
@@ -160,8 +165,8 @@ function showHassModal(serviceId, serviceName) {
         command_on: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/on"
         command_off: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/off"
         command_state: "curl -s ${baseUrl}/api/status"
-        value_template: "{{ value_json.active_services | selectattr('id', 'equalto', ${serviceId}) | list | length > 0 }}"
-        friendly_name: "Traefik ${serviceName}"`;
+        value_template: "${jinjaOpen} value_json.active_services | selectattr('id', 'equalto', ${serviceId}) | list | length > 0 ${jinjaClose}"
+        friendly_name: "Traefik ${safeServiceName}"`;
     
     document.getElementById('hassConfig').textContent = hassConfig;
     document.getElementById('hassModal').style.display = 'block';
