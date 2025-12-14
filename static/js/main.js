@@ -110,6 +110,18 @@ document.addEventListener('DOMContentLoaded', function() {
             copyToClipboard(this.dataset.regex, 'Regex pattern copied to clipboard!');
         });
     });
+    
+    // Attach event listener to modal close button
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', closeHassModal);
+    }
+    
+    // Attach event listener to copy button in modal
+    const copyHassConfigBtn = document.getElementById('copy-hass-config-btn');
+    if (copyHassConfigBtn) {
+        copyHassConfigBtn.addEventListener('click', copyHassConfig);
+    }
 });
 
 // Show temporary notification
@@ -140,6 +152,7 @@ function showHassModal(serviceId, serviceName) {
     const baseUrl = window.location.origin;
     
     // Generate the Home Assistant YAML configuration
+    // Note: serviceId is used as a number in the Jinja2 template filter
     const hassConfig = `switch:
   - platform: command_line
     switches:

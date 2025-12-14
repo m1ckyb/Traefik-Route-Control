@@ -82,14 +82,14 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Home Assistant Settings</h3>
-            <span class="modal-close" onclick="closeHassModal()">&times;</span>
+            <span class="modal-close" id="modal-close-btn">&times;</span>
         </div>
         <div class="modal-body">
             <p class="modal-info">Here's the configuration for Home Assistant to control this service:</p>
             <div class="code-block">
                 <pre id="hassConfig"></pre>
             </div>
-            <button class="btn btn-secondary" onclick="copyHassConfig()">📋 Copy to Clipboard</button>
+            <button class="btn btn-secondary" id="copy-hass-config-btn">📋 Copy to Clipboard</button>
         </div>
     </div>
 </div>
