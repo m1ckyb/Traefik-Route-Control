@@ -125,6 +125,10 @@ API_PORT = int(os.getenv("API_PORT", 5000))
 def get_redis():
     try:
         redis_host = get_setting("REDIS_HOST")
+        if not redis_host:
+            print(f"⚠️ Redis not configured")
+            return None
+        
         redis_port = int(get_setting("REDIS_PORT", required=False) or "6379")
         redis_pass = get_setting("REDIS_PASS", required=False)
         
