@@ -111,7 +111,16 @@ if os.path.exists(env_path):
     migrate_env_to_db()
 
 def get_setting(key, required=True):
-    """Get a setting from database."""
+    """Get a setting from database.
+    
+    Args:
+        key: The setting key to retrieve
+        required: Hint for documentation (no longer enforced). 
+                 Validation happens at point of use.
+    
+    Returns:
+        The setting value or None if not found
+    """
     value = db.get_setting(key)
     # Settings are now optional at startup and configured via web UI
     # No longer print errors for missing settings during startup
