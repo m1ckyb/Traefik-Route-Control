@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome - Initial Setup{% endblock %}
+
+{% block content %}
+<div class="onboarding-container">
+    <div class="onboarding-modal">
+        <div class="onboarding-header">
+            <h2>🎉 Welcome to Traefik Route Control!</h2>
+            <p>Let's configure your system in a few simple steps</p>
+        </div>
+        
+        <div class="onboarding-progress">
+            <div class="progress-step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-name">Cloudflare</div>
+            </div>
+            <div class="progress-step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-name">Traefik/Redis</div>
+            </div>
+            <div class="progress-step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-name">Firewall</div>
+            </div>
+            <div class="progress-step" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-name">Home Assistant</div>
+            </div>
+        </div>
+        
+        <form id="onboarding-form" method="POST" action="/onboarding/complete">
+            <!-- Step 1: Cloudflare Settings -->
+            <div class="onboarding-step" data-step="1" style="display: block;">
+                <h3>☁️ Cloudflare Settings</h3>
+                <p>Configure your Cloudflare API credentials for DNS management.</p>
+                
+                <div class="form-group">
+                    <label for="CF_API_TOKEN">Cloudflare API Token *</label>
+                    <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                           value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off"
+                           placeholder="Your Cloudflare API token">
+                    <small>Create a token with Zone:DNS:Edit permissions</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="CF_ZONE_ID">Cloudflare Zone ID *</label>
+                    <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                           value="{{ settings.get('CF_ZONE_ID', '') }}"
+                           placeholder="Zone ID from your Cloudflare dashboard">
+                </div>
+                
+                <div class="form-group">
+                    <label for="DOMAIN_ROOT">Domain Root *</label>
+                    <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                           value="{{ settings.get('DOMAIN_ROOT', '') }}"
+                           placeholder="example.com">
+                    <small>Your main domain name</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ORIGIN_RULE_NAME">Origin Rule Name *</label>
+                    <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                           value="{{ settings.get('ORIGIN_RULE_NAME', 'Service Rotation') }}"
+                           placeholder="Service Rotation">
+                </div>
+            </div>
+            
+            <!-- Step 2: Traefik / Redis Settings -->
+            <div class="onboarding-step" data-step="2" style="display: none;">
+                <h3>🔀 Traefik / Redis Settings</h3>
+                <p>Configure Redis connection for Traefik dynamic configuration.</p>
+                
+                <div class="form-group">
+                    <label for="REDIS_HOST">Redis Host *</label>
+                    <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                           value="{{ settings.get('REDIS_HOST', '') }}"
+                           placeholder="127.0.0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="REDIS_PORT">Redis Port *</label>
+                    <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                           value="{{ settings.get('REDIS_PORT', '6379') }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="REDIS_PASS">Redis Password</label>
+                    <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                           value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off"
+                           placeholder="Leave empty if no password">
+                    <small>Optional - only if your Redis requires authentication</small>
+                </div>
+            </div>
+            
+            <!-- Step 3: Firewall Settings -->
+            <div class="onboarding-step" data-step="3" style="display: none;">
+                <h3>🔥 Firewall Settings</h3>
+                <p>Configure your firewall controller to automatically manage port forwarding.</p>
+                
+                <div class="form-group">
+                    <label for="FIREWALL_TYPE">Firewall Controller Type</label>
+                    <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleOnboardingFirewall()">
+                        <option value="none" {% if settings.get('FIREWALL_TYPE', 'none') == 'none' %}selected{% endif %}>None (Manual Control)</option>
+                        <option value="unifi" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'unifi' %}selected{% endif %}>UniFi Controller</option>
+                    </select>
+                    <small>Choose how to control your firewall rules</small>
+                </div>
+                
+                <div id="onboarding-unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'none') == 'none' %}display: none;{% endif %}">
+                    <div class="form-group">
+                        <label for="UNIFI_HOST">UniFi Host</label>
+                        <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
+                               value="{{ settings.get('UNIFI_HOST', '') }}"
+                               placeholder="192.168.1.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_USER">UniFi Username</label>
+                        <input type="text" id="UNIFI_USER" name="UNIFI_USER" 
+                               value="{{ settings.get('UNIFI_USER', '') }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_PASS">UniFi Password</label>
+                        <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
+                               value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name</label>
+                        <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
+                               value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
+                               placeholder="External">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Step 4: Home Assistant Settings -->
+            <div class="onboarding-step" data-step="4" style="display: none;">
+                <h3>🏠 Home Assistant Settings</h3>
+                <p>Optionally integrate with Home Assistant for automation.</p>
+                
+                <div class="form-group">
+                    <label for="HASS_ENABLED">Enable Home Assistant Integration</label>
+                    <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleOnboardingHomeAssistant()">
+                        <option value="0" {% if settings.get('HASS_ENABLED', '0') == '0' %}selected{% endif %}>Disabled</option>
+                        <option value="1" {% if settings.get('HASS_ENABLED', '1') == '1' %}selected{% endif %}>Enabled</option>
+                    </select>
+                    <small>Turn this on to update Home Assistant entities with service status</small>
+                </div>
+                
+                <div id="onboarding-hass-settings" style="{% if settings.get('HASS_ENABLED', '0') == '0' %}display: none;{% endif %}">
+                    <div class="form-group">
+                        <label for="HASS_URL">Home Assistant URL</label>
+                        <input type="text" id="HASS_URL" name="HASS_URL" 
+                               value="{{ settings.get('HASS_URL', '') }}"
+                               placeholder="http://homeassistant.local:8123">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="HASS_TOKEN">Home Assistant Token</label>
+                        <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
+                               value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="onboarding-actions">
+                <button type="button" class="btn btn-secondary" id="back-btn" onclick="previousStep()" style="display: none;">
+                    ← Back
+                </button>
+                <button type="button" class="btn btn-primary" id="next-btn" onclick="nextStep()">
+                    Next →
+                </button>
+                <button type="submit" class="btn btn-primary" id="finish-btn" style="display: none;">
+                    ✓ Finish Setup
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.onboarding-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.onboarding-modal {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.onboarding-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.onboarding-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+}
+
+.onboarding-header p {
+    margin: 0;
+    color: #666;
+}
+
+.onboarding-progress {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.onboarding-progress::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: #ddd;
+    z-index: 0;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #ddd;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.step-name {
+    font-size: 0.75rem;
+    color: #999;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.progress-step.active .step-number {
+    background: #007bff;
+    color: white;
+}
+
+.progress-step.active .step-name {
+    color: #007bff;
+    font-weight: bold;
+}
+
+.progress-step.completed .step-number {
+    background: #28a745;
+    color: white;
+}
+
+.progress-step.completed .step-name {
+    color: #28a745;
+}
+
+.onboarding-step {
+    min-height: 300px;
+}
+
+.onboarding-step h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.onboarding-step > p {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #666;
+}
+
+.onboarding-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ddd;
+}
+</style>
+
+<script>
+let currentStep = 1;
+const totalSteps = 4;
+
+function showStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.onboarding-step').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Show current step
+    const stepEl = document.querySelector(`.onboarding-step[data-step="${step}"]`);
+    if (stepEl) {
+        stepEl.style.display = 'block';
+    }
+    
+    // Update progress indicators
+    document.querySelectorAll('.progress-step').forEach((el, index) => {
+        el.classList.remove('active', 'completed');
+        if (index + 1 < step) {
+            el.classList.add('completed');
+        } else if (index + 1 === step) {
+            el.classList.add('active');
+        }
+    });
+    
+    // Update buttons
+    const backBtn = document.getElementById('back-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const finishBtn = document.getElementById('finish-btn');
+    
+    if (step === 1) {
+        backBtn.style.display = 'none';
+    } else {
+        backBtn.style.display = 'inline-block';
+    }
+    
+    if (step === totalSteps) {
+        nextBtn.style.display = 'none';
+        finishBtn.style.display = 'inline-block';
+    } else {
+        nextBtn.style.display = 'inline-block';
+        finishBtn.style.display = 'none';
+    }
+}
+
+function nextStep() {
+    if (currentStep < totalSteps) {
+        currentStep++;
+        showStep(currentStep);
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        showStep(currentStep);
+    }
+}
+
+function toggleOnboardingFirewall() {
+    const type = document.getElementById('FIREWALL_TYPE').value;
+    const unifiSettings = document.getElementById('onboarding-unifi-settings');
+    
+    if (type === 'unifi') {
+        unifiSettings.style.display = 'block';
+    } else {
+        unifiSettings.style.display = 'none';
+    }
+}
+
+function toggleOnboardingHomeAssistant() {
+    const enabled = document.getElementById('HASS_ENABLED').value === '1';
+    const hassSettings = document.getElementById('onboarding-hass-settings');
+    
+    if (enabled) {
+        hassSettings.style.display = 'block';
+    } else {
+        hassSettings.style.display = 'none';
+    }
+}
+
+// Initialize first step
+showStep(1);
+</script>
+{% endblock %}

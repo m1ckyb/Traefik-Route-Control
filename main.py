@@ -927,8 +927,43 @@ def index():
     if not current_user.is_authenticated:
         return login_manager.unauthorized()
     
+    # Check if user needs onboarding
+    user = db.get_user(current_user.id)
+    if user and not user.get('onboarding_completed'):
+        return redirect(url_for('onboarding'))
+    
     services = db.get_all_services()
     return render_template('index.html', services=services)
+
+@app.route('/onboarding', methods=['GET'])
+@login_required
+def onboarding():
+    """Show onboarding wizard for new users"""
+    user = db.get_user(current_user.id)
+    if user and user.get('onboarding_completed'):
+        # Already completed onboarding, redirect to home
+        return redirect(url_for('index'))
+    
+    settings = db.get_all_settings()
+    return render_template('onboarding.html', settings=settings)
+
+@app.route('/onboarding/complete', methods=['POST'])
+@login_required
+def onboarding_complete():
+    """Complete onboarding and save all settings"""
+    try:
+        # Save all settings
+        for key in request.form:
+            db.set_setting(key, request.form[key])
+        
+        # Mark onboarding as completed
+        db.update_user_onboarding_status(current_user.id, True)
+        
+        flash('Setup completed successfully!', 'success')
+        return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('onboarding'))
 
 @app.route('/services/new', methods=['GET', 'POST'])
 @login_required
