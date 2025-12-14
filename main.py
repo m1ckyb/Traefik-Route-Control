@@ -282,7 +282,12 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
 # ================= UNIFI LOGIC =================
 
 def check_unifi_rule():
-    """Reads the current status of the UniFi Port Forward rule."""
+    """Reads the current status of the UniFi Port Forward rule.
+    
+    Returns:
+        dict: {"enabled": bool, "port": int or None} or None if not available
+              port can be None if 'dst_port' is not set in the rule
+    """
     # Check if firewall control is enabled
     firewall_type = get_setting("FIREWALL_TYPE", required=False)
     if firewall_type == "none":
@@ -314,7 +319,10 @@ def check_unifi_rule():
         
         target_rule = next((r for r in rules if r.get("name") == unifi_rule_name), None)
         if target_rule:
-            return target_rule["enabled"] # Returns True or False
+            return {
+                "enabled": target_rule["enabled"],
+                "port": target_rule.get("dst_port")
+            }
         return None # Rule not found
         
     except Exception:
@@ -422,10 +430,10 @@ def get_status():
     
     # Check UniFi Status
     firewall_status = "UNKNOWN"
-    is_open = check_unifi_rule()
-    if is_open is True:
+    rule_info = check_unifi_rule()
+    if rule_info and rule_info["enabled"] is True:
         firewall_status = "OPEN"
-    elif is_open is False:
+    elif rule_info and rule_info["enabled"] is False:
         firewall_status = "CLOSED"
     
     # Get all services and their status
@@ -1191,12 +1199,15 @@ def api_status():
 @api_key_or_login_required
 def api_firewall_status():
     firewall_status = "UNKNOWN"
-    is_open = check_unifi_rule()
-    if is_open is True:
-        firewall_status = "OPEN"
-    elif is_open is False:
-        firewall_status = "CLOSED"
-    return jsonify({"status": firewall_status})
+    firewall_port = None
+    rule_info = check_unifi_rule()
+    if rule_info:
+        if rule_info["enabled"] is True:
+            firewall_status = "OPEN"
+        elif rule_info["enabled"] is False:
+            firewall_status = "CLOSED"
+        firewall_port = rule_info.get("port")
+    return jsonify({"status": firewall_status, "port": firewall_port})
 
 @app.route('/api/services/<int:service_id>/on', methods=['POST'])
 @api_key_or_login_required

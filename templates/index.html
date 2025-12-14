@@ -42,11 +42,6 @@
                     https://{{ service.current_hostname }}
                 </a>
             </div>
-            {% if service.current_port %}
-            <div class="info-row">
-                <strong>Current Port:</strong> <code>{{ service.current_port }}</code>
-            </div>
-            {% endif %}
             <div class="info-row">
                 <strong>Regex Pattern:</strong>
                 <code class="regex-pattern" data-regex="^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$" title="Click to copy"></code>
