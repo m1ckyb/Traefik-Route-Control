@@ -865,16 +865,11 @@ def login_complete():
         return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
-        # Convert credential ID from base64 to hex to match database storage
-        # The credential['rawId'] is base64-encoded, we need to convert to hex
+        # Convert credential ID from base64 URL-safe to hex to match database storage
+        # The credential['rawId'] is base64 URL-safe encoded
         cred_id_base64 = credential.get('rawId', '')
-        # Convert base64 URL-safe to standard base64
-        cred_id_base64_standard = cred_id_base64.replace('-', '+').replace('_', '/')
-        # Add padding if needed
-        while len(cred_id_base64_standard) % 4 != 0:
-            cred_id_base64_standard += '='
-        # Decode to bytes and convert to hex
-        cred_id_bytes = base64.b64decode(cred_id_base64_standard)
+        # Decode using urlsafe_b64decode which handles padding automatically
+        cred_id_bytes = base64.urlsafe_b64decode(cred_id_base64 + '==')  # Add padding for safety
         cred_id_hex = cred_id_bytes.hex()
         
         # Get credential from database

@@ -145,7 +145,7 @@
                     <label for="HASS_ENABLED">Enable Home Assistant Integration</label>
                     <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleOnboardingHomeAssistant()">
                         <option value="0" {% if settings.get('HASS_ENABLED', '0') == '0' %}selected{% endif %}>Disabled</option>
-                        <option value="1" {% if settings.get('HASS_ENABLED', '1') == '1' %}selected{% endif %}>Enabled</option>
+                        <option value="1" {% if settings.get('HASS_ENABLED', '0') == '1' %}selected{% endif %}>Enabled</option>
                     </select>
                     <small>Turn this on to update Home Assistant entities with service status</small>
                 </div>
