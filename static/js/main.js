@@ -105,6 +105,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Attach event listeners to regex patterns
     document.querySelectorAll('.regex-pattern[data-regex]').forEach(element => {
+        // Populate the visible text from data attribute to avoid duplication
+        element.textContent = element.dataset.regex;
+        
         element.addEventListener('click', function(event) {
             event.preventDefault();
             copyToClipboard(this.dataset.regex, 'Regex pattern copied to clipboard!');
@@ -158,6 +161,7 @@ function showHassModal(serviceId, serviceName) {
     const jinjaOpen = '{{';
     const jinjaClose = '}}';
     
+    // Note: serviceId is always numeric (INTEGER PRIMARY KEY from database)
     const hassConfig = `switch:
   - platform: command_line
     switches:
@@ -191,9 +195,29 @@ window.addEventListener('click', function(event) {
 
 // Copy to clipboard function
 function copyToClipboard(text, successMessage) {
-    navigator.clipboard.writeText(text).then(() => {
-        showNotification(successMessage, 'success');
-    }).catch(err => {
-        showNotification('Failed to copy: ' + err, 'error');
-    });
+    // Modern clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification(successMessage, 'success');
+        }).catch(err => {
+            showNotification('Failed to copy: ' + err, 'error');
+        });
+    } else {
+        // Fallback for older browsers or non-HTTPS contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            showNotification(successMessage, 'success');
+        } catch (err) {
+            showNotification('Failed to copy: ' + err, 'error');
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    }
 }
