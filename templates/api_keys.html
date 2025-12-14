@@ -190,19 +190,35 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
 
 <style>
 .info-box {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    color: var(--text);
 }
 
 .info-box h3 {
     margin-top: 0;
+    color: var(--text);
+}
+
+.info-box p {
+    color: var(--text);
 }
 
 .info-box ul {
     margin-left: 1.5rem;
+    color: var(--text);
+}
+
+.info-box ul li {
+    color: var(--text);
+}
+
+.info-box code {
+    background: var(--bg-input);
+    color: var(--text);
 }
 
 .api-key-display {
@@ -215,11 +231,12 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
 .api-key-display code {
     flex: 1;
     padding: 0.75rem;
-    background: white;
-    border: 1px solid #ced4da;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-family: monospace;
     word-break: break-all;
+    color: var(--text);
 }
 
 .copy-status {
@@ -251,28 +268,32 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
 }
 
 .modal-content {
-    background: white;
+    background: var(--bg-card);
     padding: 2rem;
     border-radius: 8px;
     max-width: 500px;
     width: 90%;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    color: var(--text);
 }
 
 .modal-content h3 {
     margin-top: 0;
     margin-bottom: 1rem;
+    color: var(--text);
 }
 
 .modal-content p {
     margin-bottom: 1rem;
+    color: var(--text);
 }
 
 .warning-text {
-    color: #856404;
-    background: #fff3cd;
+    color: #d97706;
+    background: rgba(234, 88, 12, 0.1);
     padding: 0.5rem;
     border-radius: 4px;
+    border: 1px solid var(--warning);
 }
 
 .modal-buttons {
@@ -296,12 +317,14 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
 .table td {
     padding: 0.75rem;
     text-align: left;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
 }
 
 .table thead th {
     font-weight: 600;
-    background: #f8f9fa;
+    background: var(--bg-input);
+    color: var(--text);
 }
 
 .badge {
@@ -329,7 +352,7 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
 }
 
 .text-muted {
-    color: #6c757d;
+    color: var(--text-dim);
 }
 
 .form-horizontal .form-group {
@@ -340,14 +363,17 @@ document.getElementById('delete-modal')?.addEventListener('click', (e) => {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
+    color: var(--text);
 }
 
 .form-horizontal input {
     width: 100%;
     max-width: 400px;
     padding: 0.5rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--border);
     border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text);
 }
 
 .btn-sm {
