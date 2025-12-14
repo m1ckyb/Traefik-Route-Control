@@ -1064,6 +1064,16 @@ def api_rotate(service_id):
         return jsonify(result), 400
     return jsonify(result)
 
+@app.route('/api/services/<int:service_id>/status', methods=['GET'])
+@login_required
+def api_service_status(service_id):
+    result = get_service_status(service_id)
+    if result is None:
+        return jsonify({"error": "Service not found"}), 404
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
 @login_required
 def api_delete_service(service_id):
