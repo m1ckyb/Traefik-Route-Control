@@ -387,13 +387,13 @@ def toggle_unifi(enable_rule, forward_port=None):
     # Update the rule
     target_rule["enabled"] = enable_rule
     
-    # Update the forward port if provided
+    # Update the WAN port if provided
     if forward_port is not None and enable_rule:
-        old_port = target_rule.get("fwd_port", "unknown")
+        old_port = target_rule.get("dst_port", "unknown")
         if old_port != forward_port:
-            target_rule["fwd_port"] = str(forward_port)
+            target_rule["dst_port"] = str(forward_port)
             changes.append(f"port={forward_port}")
-            print(f"   Updating port forwarding: {old_port} → {forward_port}")
+            print(f"   Updating WAN port: {old_port} → {forward_port}")
     
     if not changes:
         print(f"   UniFi rule is already configured correctly.")
