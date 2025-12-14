@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}API Keys - Traefik Route Control{% endblock %}
+
+{% block content %}
+<div class="header-row">
+    <h2>API Keys</h2>
+</div>
+
+<div class="info-box">
+    <h3>ℹ️ About API Keys</h3>
+    <p>API keys allow you to authenticate API requests without using a session cookie. This is useful for:</p>
+    <ul>
+        <li>Programmatic access from scripts or automation tools</li>
+        <li>Integration with external systems</li>
+        <li>Command-line tools like curl</li>
+    </ul>
+    <p><strong>Usage:</strong> Include your API key in the <code>X-API-Key</code> header:</p>
+    <code>curl -H "X-API-Key: your-api-key-here" https://your-domain.com/api/services/1/status</code>
+</div>
+
+{% if session.get('new_api_key') %}
+<div class="alert alert-success">
+    <h3>⚠️ New API Key Created</h3>
+    <p><strong>Save this key now - it will not be shown again!</strong></p>
+    <div class="api-key-display">
+        <code id="new-api-key">{{ session.pop('new_api_key') }}</code>
+        <button onclick="copyApiKey()" class="btn btn-secondary">Copy</button>
+    </div>
+</div>
+{% endif %}
+
+<div class="section">
+    <h3>Create New API Key</h3>
+    <form method="POST" action="/api-keys/create" class="form-horizontal">
+        <div class="form-group">
+            <label for="name">Key Name:</label>
+            <input type="text" id="name" name="name" placeholder="e.g., Home Automation Script" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Create API Key</button>
+    </form>
+</div>
+
+<div class="section">
+    <h3>Your API Keys</h3>
+    {% if api_keys %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key in api_keys %}
+            <tr>
+                <td>{{ key.name }}</td>
+                <td>{{ key.created_at }}</td>
+                <td>{{ key.last_used_at or 'Never' }}</td>
+                <td>
+                    <form method="POST" action="/api-keys/{{ key.id }}/delete" style="display: inline;" 
+                          onsubmit="return confirm('Are you sure you want to delete this API key?');">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No API keys created yet.</p>
+    {% endif %}
+</div>
+
+<div class="section">
+    <h3>Available API Endpoints</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="badge badge-get">GET</span></td>
+                <td><code>/api/status</code></td>
+                <td>Get overall system status</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-get">GET</span></td>
+                <td><code>/api/firewall-status</code></td>
+                <td>Get firewall status</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-get">GET</span></td>
+                <td><code>/api/services/{id}/status</code></td>
+                <td>Get status of a specific service</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-post">POST</span></td>
+                <td><code>/api/services/{id}/on</code></td>
+                <td>Turn on a specific service</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-post">POST</span></td>
+                <td><code>/api/services/{id}/off</code></td>
+                <td>Turn off a specific service</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-post">POST</span></td>
+                <td><code>/api/services/{id}/rotate</code></td>
+                <td>Rotate URL for a service</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-delete">DELETE</span></td>
+                <td><code>/api/services/{id}</code></td>
+                <td>Delete a service</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+function copyApiKey() {
+    const keyElement = document.getElementById('new-api-key');
+    const text = keyElement.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('API key copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+</script>
+
+<style>
+.info-box {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.info-box h3 {
+    margin-top: 0;
+}
+
+.info-box ul {
+    margin-left: 1.5rem;
+}
+
+.api-key-display {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.api-key-display code {
+    flex: 1;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.section {
+    margin-bottom: 3rem;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.table th,
+.table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.table thead th {
+    font-weight: 600;
+    background: #f8f9fa;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-get {
+    background: #28a745;
+    color: white;
+}
+
+.badge-post {
+    background: #007bff;
+    color: white;
+}
+
+.badge-delete {
+    background: #dc3545;
+    color: white;
+}
+
+.text-muted {
+    color: #6c757d;
+}
+
+.form-horizontal .form-group {
+    margin-bottom: 1rem;
+}
+
+.form-horizontal label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-horizontal input {
+    width: 100%;
+    max-width: 400px;
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}
