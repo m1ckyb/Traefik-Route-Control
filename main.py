@@ -199,19 +199,26 @@ def generate_random_port():
     Generate a random port between 1024 and 65535, avoiding known assigned ports.
     Returns a port number that is not in the RESERVED_PORTS set.
     """
-    max_attempts = 100
+    # Get active ports once to avoid repeated database queries
+    services = db.get_all_services()
+    ports_in_use = {s.get('current_port') for s in services if s.get('enabled') and s.get('current_port')}
+    
+    max_attempts = 1000
     for _ in range(max_attempts):
         port = random.randint(1024, 65535)
-        if port not in RESERVED_PORTS:
-            # Also check if port is already in use by another active service
-            services = db.get_all_services()
-            ports_in_use = {s.get('current_port') for s in services if s.get('enabled') and s.get('current_port')}
-            if port not in ports_in_use:
-                return port
+        if port not in RESERVED_PORTS and port not in ports_in_use:
+            return port
     
-    # If we couldn't find a port after max_attempts, fall back to a random port
-    # This is extremely unlikely given the large range
-    return random.randint(40000, 60000)
+    # Fallback: try to find a port in a safe range that avoids both reserved and in-use ports
+    # Using higher port range which has fewer common services
+    for _ in range(max_attempts):
+        port = random.randint(49152, 65535)  # Dynamic/Private port range
+        if port not in RESERVED_PORTS and port not in ports_in_use:
+            return port
+    
+    # Ultimate fallback (should never reach here given 64k port space)
+    # Return a port in the dynamic range, even if it might be reserved
+    return random.randint(49152, 65535)
 
 def count_active_routers():
     """Counts how many Traefik routers are currently active in Redis."""
@@ -515,8 +522,8 @@ def turn_off_service(service_id):
     print("🔹 Updating Home Assistant...")
     update_hass("Disabled", service['name'], service.get('hass_entity_id'))
     
-    # Update database
-    db.update_service_status(service_id, False, None)
+    # Update database - clear hostname and port
+    db.update_service_status(service_id, False, None, None)
     
     print(f"✅ {service['name']} ACCESS DISABLED.\n")
     return {"message": f"{service['name']} disabled successfully"}
