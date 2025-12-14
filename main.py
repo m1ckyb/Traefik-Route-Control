@@ -12,6 +12,8 @@ import json
 import secrets
 import time
 import base64
+import hashlib
+from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -607,6 +609,48 @@ def load_user(user_id):
         return User(user['id'], user['username'])
     return None
 
+# API Key authentication support
+def api_key_or_login_required(f):
+    """Decorator that allows either API key or session-based authentication."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check for API key in header
+        api_key = request.headers.get('X-API-Key')
+        if api_key is not None:
+            # API key header was provided (even if empty)
+            # Strip whitespace and check if non-empty
+            api_key = api_key.strip()
+            if not api_key:
+                # Empty API key
+                return jsonify({"error": "Invalid API key"}), 401
+            
+            # Hash the provided key
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            # Check if key exists in database
+            key_data = db.get_api_key_by_hash(key_hash)
+            if key_data:
+                # Update last used timestamp
+                db.update_api_key_last_used(key_hash)
+                # Continue with the request
+                return f(*args, **kwargs)
+            else:
+                # Invalid API key
+                return jsonify({"error": "Invalid API key"}), 401
+        
+        # No API key, check for session-based authentication
+        if current_user.is_authenticated:
+            return f(*args, **kwargs)
+        
+        # Neither authentication method succeeded
+        # For API requests (JSON expected), return 401
+        # For browser requests, redirect to login
+        if request.path.startswith('/api/'):
+            return jsonify({"error": "Authentication required. Provide X-API-Key header or log in."}), 401
+        else:
+            return login_manager.unauthorized()
+    
+    return decorated_function
+
 # RP (Relying Party) settings for WebAuthn
 RP_ID = os.environ.get('RP_ID', 'localhost')
 RP_NAME = "Traefik Route Control"
@@ -1034,12 +1078,12 @@ def settings():
 
 # API Routes
 @app.route('/api/status', methods=['GET'])
-@login_required
+@api_key_or_login_required
 def api_status():
     return jsonify(get_status())
 
 @app.route('/api/firewall-status', methods=['GET'])
-@login_required
+@api_key_or_login_required
 def api_firewall_status():
     firewall_status = "UNKNOWN"
     is_open = check_unifi_rule()
@@ -1050,7 +1094,7 @@ def api_firewall_status():
     return jsonify({"status": firewall_status})
 
 @app.route('/api/services/<int:service_id>/on', methods=['POST'])
-@login_required
+@api_key_or_login_required
 def api_turn_on(service_id):
     result = turn_on_service(service_id)
     if "error" in result:
@@ -1058,7 +1102,7 @@ def api_turn_on(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/off', methods=['POST'])
-@login_required
+@api_key_or_login_required
 def api_turn_off(service_id):
     result = turn_off_service(service_id)
     if "error" in result:
@@ -1066,7 +1110,7 @@ def api_turn_off(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/rotate', methods=['POST'])
-@login_required
+@api_key_or_login_required
 def api_rotate(service_id):
     result = rotate_service(service_id)
     if "error" in result:
@@ -1074,7 +1118,7 @@ def api_rotate(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/status', methods=['GET'])
-@login_required
+@api_key_or_login_required
 def api_service_status(service_id):
     result = get_service_status(service_id)
     if result is None:
@@ -1084,7 +1128,7 @@ def api_service_status(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
-@login_required
+@api_key_or_login_required
 def api_delete_service(service_id):
     service = db.get_service(service_id)
     if not service:
@@ -1099,7 +1143,7 @@ def api_delete_service(service_id):
 
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
-@login_required
+@api_key_or_login_required
 def api_legacy_turn_on():
     services = db.get_all_services()
     if not services:
@@ -1110,7 +1154,7 @@ def api_legacy_turn_on():
     return jsonify(result)
 
 @app.route('/api/turn_off', methods=['POST'])
-@login_required
+@api_key_or_login_required
 def api_legacy_turn_off():
     services = db.get_all_services()
     if not services:
@@ -1119,6 +1163,56 @@ def api_legacy_turn_off():
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
+
+# API Key Management Routes
+@app.route('/api-keys', methods=['GET'])
+@login_required
+def api_keys_page():
+    """Show API key management page"""
+    api_keys = db.get_api_keys_for_user(current_user.id)
+    return render_template('api_keys.html', api_keys=api_keys)
+
+@app.route('/api-keys/create', methods=['POST'])
+@login_required
+def create_api_key():
+    """Create a new API key"""
+    try:
+        name = request.form.get('name', 'API Key')
+        
+        # Generate a random API key (32 bytes = 64 hex characters)
+        api_key = secrets.token_hex(32)
+        
+        # Hash the key for storage
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
+        # Store in database
+        db.add_api_key(current_user.id, key_hash, name)
+        
+        # Store temporarily in session to show on redirect (only shown once)
+        session['new_api_key'] = api_key
+        
+        return redirect(url_for('api_keys_page'))
+    except Exception as e:
+        flash(f'Error creating API key: {str(e)}', 'error')
+        return redirect(url_for('api_keys_page'))
+
+@app.route('/api-keys/<int:key_id>/delete', methods=['POST'])
+@login_required
+def delete_api_key_route(key_id):
+    """Delete an API key"""
+    try:
+        # Verify the key belongs to the current user
+        keys = db.get_api_keys_for_user(current_user.id)
+        if not any(k['id'] == key_id for k in keys):
+            flash('API key not found', 'error')
+            return redirect(url_for('api_keys_page'))
+        
+        db.delete_api_key(key_id)
+        flash('API key deleted successfully', 'success')
+        return redirect(url_for('api_keys_page'))
+    except Exception as e:
+        flash(f'Error deleting API key: {str(e)}', 'error')
+        return redirect(url_for('api_keys_page'))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Control Traefik Route Rotation")
