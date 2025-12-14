@@ -51,7 +51,7 @@
                 let statusClass = `status-badge status-${data.status.toLowerCase()}`;
                 
                 // If firewall is open and port is available, show the port
-                if (data.status === 'OPEN' && data.port) {
+                if (data.status === 'OPEN' && data.port != null) {
                     statusText = data.port;
                 } else if (data.status === 'CLOSED') {
                     statusText = 'Closed';

@@ -285,7 +285,8 @@ def check_unifi_rule():
     """Reads the current status of the UniFi Port Forward rule.
     
     Returns:
-        dict: {"enabled": bool, "port": int} or None if not available
+        dict: {"enabled": bool, "port": int or None} or None if not available
+              port can be None if 'dst_port' is not set in the rule
     """
     # Check if firewall control is enabled
     firewall_type = get_setting("FIREWALL_TYPE", required=False)
