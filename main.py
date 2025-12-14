@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import json
 import secrets
 import time
+import base64
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -831,11 +832,23 @@ def login_complete():
         return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
+        # Convert credential ID from base64 to hex to match database storage
+        # The credential['rawId'] is base64-encoded, we need to convert to hex
+        cred_id_base64 = credential.get('rawId', '')
+        # Convert base64 URL-safe to standard base64
+        cred_id_base64_standard = cred_id_base64.replace('-', '+').replace('_', '/')
+        # Add padding if needed
+        while len(cred_id_base64_standard) % 4 != 0:
+            cred_id_base64_standard += '='
+        # Decode to bytes and convert to hex
+        cred_id_bytes = base64.b64decode(cred_id_base64_standard)
+        cred_id_hex = cred_id_bytes.hex()
+        
         # Get credential from database
-        cred_id = credential.get('id')
-        db_credential = db.get_credential_by_id(cred_id)
+        db_credential = db.get_credential_by_id(cred_id_hex)
         
         if not db_credential or db_credential['user_id'] != user_id:
+            print(f"⚠️ Credential lookup failed: cred_id_hex={cred_id_hex}, db_credential={db_credential}")
             return jsonify({"error": "Invalid credential"}), 400
         
         # Verify the authentication response
@@ -848,8 +861,8 @@ def login_complete():
             credential_current_sign_count=db_credential['sign_count']
         )
         
-        # Update sign count
-        db.update_credential_sign_count(cred_id, verification.new_sign_count)
+        # Update sign count using the hex credential ID
+        db.update_credential_sign_count(cred_id_hex, verification.new_sign_count)
         
         # Log the user in
         user = db.get_user(user_id)
