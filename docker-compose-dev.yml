@@ -5,7 +5,7 @@ services:
     container_name: jellyfin-rotator
     # Mount the .env file from the host to the container
     volumes:
-      - ./.env:/app/.env
+      - ./data:/app/data
     # Expose the port for the API server
     ports:
       - "5000:5000"
