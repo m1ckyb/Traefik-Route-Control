@@ -616,7 +616,14 @@ def api_key_or_login_required(f):
     def decorated_function(*args, **kwargs):
         # Check for API key in header
         api_key = request.headers.get('X-API-Key')
-        if api_key:
+        if api_key is not None:
+            # API key header was provided (even if empty)
+            # Strip whitespace and check if non-empty
+            api_key = api_key.strip()
+            if not api_key:
+                # Empty API key
+                return jsonify({"error": "Invalid API key"}), 401
+            
             # Hash the provided key
             key_hash = hashlib.sha256(api_key.encode()).hexdigest()
             # Check if key exists in database
