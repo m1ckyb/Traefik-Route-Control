@@ -163,6 +163,7 @@ function showHassModal(serviceId, serviceName) {
     
     // Note: serviceId is always numeric (INTEGER PRIMARY KEY from database)
     const hassConfig = `- switch:
+    platform: command_line
     command_on: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/on"
     command_off: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/off"
     command_state: "curl -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/status"
