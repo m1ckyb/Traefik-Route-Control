@@ -196,7 +196,7 @@
 }
 
 .onboarding-modal {
-    background: white;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 2rem;
     max-width: 600px;
@@ -204,6 +204,7 @@
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    color: var(--text);
 }
 
 .onboarding-header {
@@ -213,12 +214,12 @@
 
 .onboarding-header h2 {
     margin: 0 0 0.5rem 0;
-    color: #333;
+    color: var(--text);
 }
 
 .onboarding-header p {
     margin: 0;
-    color: #666;
+    color: var(--text-dim);
 }
 
 .onboarding-progress {
@@ -235,7 +236,7 @@
     left: 10%;
     right: 10%;
     height: 2px;
-    background: #ddd;
+    background: var(--border);
     z-index: 0;
 }
 
@@ -252,8 +253,8 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #ddd;
-    color: #999;
+    background: var(--bg-input);
+    color: var(--text-dim);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -264,28 +265,28 @@
 
 .step-name {
     font-size: 0.75rem;
-    color: #999;
+    color: var(--text-dim);
     text-align: center;
     transition: all 0.3s ease;
 }
 
 .progress-step.active .step-number {
-    background: #007bff;
+    background: var(--primary);
     color: white;
 }
 
 .progress-step.active .step-name {
-    color: #007bff;
+    color: var(--primary);
     font-weight: bold;
 }
 
 .progress-step.completed .step-number {
-    background: #28a745;
+    background: var(--success);
     color: white;
 }
 
 .progress-step.completed .step-name {
-    color: #28a745;
+    color: var(--success);
 }
 
 .onboarding-step {
@@ -295,13 +296,13 @@
 .onboarding-step h3 {
     margin-top: 0;
     margin-bottom: 0.5rem;
-    color: #333;
+    color: var(--text);
 }
 
 .onboarding-step > p {
     margin-top: 0;
     margin-bottom: 1.5rem;
-    color: #666;
+    color: var(--text-dim);
 }
 
 .onboarding-actions {
@@ -310,7 +311,7 @@
     justify-content: flex-end;
     margin-top: 2rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--border);
 }
 </style>
 

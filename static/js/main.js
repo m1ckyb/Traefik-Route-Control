@@ -162,15 +162,14 @@ function showHassModal(serviceId, serviceName) {
     const jinjaClose = '}}';
     
     // Note: serviceId is always numeric (INTEGER PRIMARY KEY from database)
-    const hassConfig = `switch:
-  - platform: command_line
-    switches:
-      traefik_${serviceNameSlug}:
-        command_on: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/on"
-        command_off: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/off"
-        command_state: "curl -s ${baseUrl}/api/services/${serviceId}/status"
-        value_template: "${jinjaOpen} value_json.status == 'ONLINE' ${jinjaClose}"
-        friendly_name: "Traefik ${safeServiceName}"`;
+    const hassConfig = `- switch:
+    platform: command_line
+    command_on: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/on"
+    command_off: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/off"
+    command_state: "curl -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/status"
+    value_template: "${jinjaOpen} value_json.status == 'ONLINE' ${jinjaClose}"
+    unique_id: "traefik_${serviceNameSlug}"
+    name: "traefik ${safeServiceName}"`;
     
     document.getElementById('hassConfig').textContent = hassConfig;
     document.getElementById('hassModal').style.display = 'block';
