@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header-row">
+    <h2>Services</h2>
+    <a href="/services/new" class="btn btn-primary">+ Add Service</a>
+</div>
+
+{% if services %}
+<div class="services-grid">
+    {% for service in services %}
+    <div class="service-card" data-service-id="{{ service.id }}">
+        <div class="service-header">
+            <h3>{{ service.name }}</h3>
+            <div class="service-header-right">
+                <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
+                    {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
+                </span>
+                <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
+                    ⚙️
+                </button>
+            </div>
+        </div>
+        
+        <div class="service-info">
+            <div class="info-row">
+                <strong>Router:</strong> <code>{{ service.router_name }}</code>
+            </div>
+            <div class="info-row">
+                <strong>Service:</strong> <code>{{ service.service_name }}</code>
+            </div>
+            <div class="info-row">
+                <strong>Target:</strong> <code>{{ service.target_url }}</code>
+            </div>
+            <div class="info-row">
+                <strong>Prefix:</strong> <code>{{ service.subdomain_prefix }}</code>
+            </div>
+            {% if service.enabled and service.current_hostname %}
+            <div class="info-row">
+                <strong>Current URL:</strong> 
+                <a href="https://{{ service.current_hostname }}" target="_blank" class="url-link">
+                    https://{{ service.current_hostname }}
+                </a>
+            </div>
+            <div class="info-row">
+                <strong>Regex Pattern:</strong>
+                <code class="regex-pattern" data-regex="^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$" title="Click to copy"></code>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="service-actions">
+            {% if service.enabled %}
+            <button class="btn btn-warning" onclick="toggleService({{ service.id }}, false, event)">
+                🛑 Turn Off
+            </button>
+            <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
+                🔄 Rotate URL
+            </button>
+            {% else %}
+            <button class="btn btn-success" onclick="toggleService({{ service.id }}, true, event)">
+                🚀 Turn On
+            </button>
+            {% endif %}
+            <a href="/services/{{ service.id }}/edit" class="btn btn-secondary">✏️ Edit</a>
+            <button class="btn btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)">
+                🗑️ Delete
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No services configured yet.</p>
+    <a href="/services/new" class="btn btn-primary">Add Your First Service</a>
+</div>
+{% endif %}
+
+<!-- Home Assistant Settings Modal -->
+<div id="hassModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Home Assistant Settings</h3>
+            <span class="modal-close" id="modal-close-btn">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="modal-info">Here's the configuration for Home Assistant to control this service:</p>
+            <div class="code-block">
+                <pre id="hassConfig"></pre>
+            </div>
+            <button class="btn btn-secondary" id="copy-hass-config-btn">📋 Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

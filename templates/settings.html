@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Traefik Route Control{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2>Global Settings</h2>
+    
+    <form method="POST" class="settings-form">
+        <h3>Cloudflare Settings</h3>
+        
+        <div class="form-group">
+            <label for="CF_API_TOKEN">Cloudflare API Token</label>
+            <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                   value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+            <label for="CF_ZONE_ID">Cloudflare Zone ID</label>
+            <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                   value="{{ settings.get('CF_ZONE_ID', '') }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="DOMAIN_ROOT">Domain Root</label>
+            <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                   value="{{ settings.get('DOMAIN_ROOT', '') }}"
+                   placeholder="example.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="ORIGIN_RULE_NAME">Origin Rule Name</label>
+            <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                   value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
+                   placeholder="Service Rotation">
+        </div>
+        
+        <h3>Traefik / Redis Settings</h3>
+        
+        <div class="form-group">
+            <label for="REDIS_HOST">Redis Host</label>
+            <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                   value="{{ settings.get('REDIS_HOST', '') }}"
+                   placeholder="127.0.0.1">
+        </div>
+        
+        <div class="form-group">
+            <label for="REDIS_PORT">Redis Port</label>
+            <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                   value="{{ settings.get('REDIS_PORT', '6379') }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="REDIS_PASS">Redis Password (optional)</label>
+            <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                   value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
+        </div>
+        
+        <h3>Home Assistant Settings</h3>
+        
+        <div class="form-group">
+            <label for="HASS_ENABLED">Enable Home Assistant Integration</label>
+            <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleHomeAssistantSettings()">
+                <option value="0" {% if settings.get('HASS_ENABLED', '0') == '0' %}selected{% endif %}>Disabled</option>
+                <option value="1" {% if settings.get('HASS_ENABLED', '0') == '1' %}selected{% endif %}>Enabled</option>
+            </select>
+        </div>
+        
+        <div id="hass-settings" style="{% if settings.get('HASS_ENABLED', '1') == '0' %}display: none;{% endif %}">
+            <div class="form-group">
+                <label for="HASS_URL">Home Assistant URL</label>
+                <input type="text" id="HASS_URL" name="HASS_URL" 
+                       value="{{ settings.get('HASS_URL', '') }}"
+                       placeholder="http://homeassistant.local:8123">
+            </div>
+            
+            <div class="form-group">
+                <label for="HASS_TOKEN">Home Assistant Token</label>
+                <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
+                       value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off">
+            </div>
+        </div>
+        
+        <h3>Firewall Settings</h3>
+        
+        <div class="form-group">
+            <label for="FIREWALL_TYPE">Firewall Controller Type</label>
+            <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleFirewallSettings()">
+                <option value="none" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}selected{% endif %}>None</option>
+                <option value="unifi" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'unifi' %}selected{% endif %}>UniFi</option>
+            </select>
+        </div>
+        
+        <div id="unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% endif %}">
+            <div class="form-group">
+                <label for="UNIFI_HOST">UniFi Host</label>
+                <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
+                       value="{{ settings.get('UNIFI_HOST', '') }}"
+                       placeholder="192.168.1.1">
+            </div>
+            
+            <div class="form-group">
+                <label for="UNIFI_USER">UniFi Username</label>
+                <input type="text" id="UNIFI_USER" name="UNIFI_USER" 
+                       value="{{ settings.get('UNIFI_USER', '') }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="UNIFI_PASS">UniFi Password</label>
+                <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
+                       value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
+            </div>
+            
+            <div class="form-group">
+                <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name</label>
+                <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
+                       value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
+                       placeholder="External">
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">💾 Save Settings</button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleHomeAssistantSettings() {
+    const enabled = document.getElementById('HASS_ENABLED').value === '1';
+    const hassSettings = document.getElementById('hass-settings');
+    
+    if (enabled) {
+        hassSettings.style.display = 'block';
+    } else {
+        hassSettings.style.display = 'none';
+    }
+}
+
+function toggleFirewallSettings() {
+    const type = document.getElementById('FIREWALL_TYPE').value;
+    const unifiSettings = document.getElementById('unifi-settings');
+    
+    if (type === 'unifi') {
+        unifiSettings.style.display = 'block';
+    } else {
+        unifiSettings.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

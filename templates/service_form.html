@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{% if service %}Edit Service{% else %}Add Service{% endif %} - Traefik Route Control{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2>{% if service %}Edit Service{% else %}Add New Service{% endif %}</h2>
+    
+    <form method="POST" class="service-form">
+        <div class="form-group">
+            <label for="name">Service Name</label>
+            <input type="text" id="name" name="name" required 
+                   value="{{ service.name if service else '' }}"
+                   placeholder="e.g., Jellyfin, Sonarr, etc.">
+            <small>A friendly name to identify this service</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="router_name">Router Name</label>
+            <input type="text" id="router_name" name="router_name" required 
+                   value="{{ service.router_name if service else '' }}"
+                   placeholder="e.g., jellyfin-secure">
+            <small>Unique Traefik router name (alphanumeric and dashes only)</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="service_name">Service Name (Traefik)</label>
+            <input type="text" id="service_name" name="service_name" required 
+                   value="{{ service.service_name if service else '' }}"
+                   placeholder="e.g., jellyfin-service">
+            <small>Traefik service name for load balancer</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="target_url">Target URL</label>
+            <input type="text" id="target_url" name="target_url" required 
+                   value="{{ service.target_url if service else '' }}"
+                   placeholder="http://192.168.1.10:8096">
+            <small>Internal URL where the service is accessible</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="subdomain_prefix">Subdomain Prefix</label>
+            <input type="text" id="subdomain_prefix" name="subdomain_prefix" required 
+                   value="{{ service.subdomain_prefix if service else '' }}"
+                   placeholder="jf" maxlength="10">
+            <small>Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="hass_entity_id">Home Assistant Entity ID (optional)</label>
+            <input type="text" id="hass_entity_id" name="hass_entity_id" 
+                   value="{{ service.hass_entity_id if service else '' }}"
+                   placeholder="input_text.jellyfin_url">
+            <small>Specific entity ID for this service. Leave empty to use global setting.</small>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if service %}💾 Save Changes{% else %}➕ Add Service{% endif %}
+            </button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
