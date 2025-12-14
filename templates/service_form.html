@@ -47,6 +47,14 @@
             <small>Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
         </div>
         
+        <div class="form-group">
+            <label for="hass_entity_id">Home Assistant Entity ID (optional)</label>
+            <input type="text" id="hass_entity_id" name="hass_entity_id" 
+                   value="{{ service.hass_entity_id if service else '' }}"
+                   placeholder="input_text.jellyfin_url">
+            <small>Specific entity ID for this service. Leave empty to use global setting.</small>
+        </div>
+        
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">
                 {% if service %}💾 Save Changes{% else %}➕ Add Service{% endif %}

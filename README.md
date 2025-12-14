@@ -7,13 +7,14 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 ## ✨ Features
 
 - **Multi-Service Management**: Control multiple services (Jellyfin, Sonarr, Radarr, etc.) from a single web interface
+- **Passkey Authentication**: Secure login with WebAuthn passkey support (biometric or PIN-based authentication)
+- **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
 - **Web UI Configuration**: Configure all settings and services through an intuitive web interface - no .env files needed
 - **Rotating Subdomains**: Generates a random URL (e.g., https://jf-k92m1x0p.domain.com) every time you enable a service
 - **Cloudflare Integration**: Automatically creates DNS records and updates Origin Rules (Port Rewrites)
 - **Traefik Dynamic Routing**: Uses Redis to inject routing rules into Traefik without restarting containers
 - **UniFi Firewall Control**: Automatically opens the specific Port Forwarding rule on your UDM Pro only when services are active
 - **Multi-Service Safety**: Checks if other services are using the port before closing the firewall
-- **Home Assistant Integration**: Updates a dashboard entity with the live URL and provides a toggle switch
 - **Persistent Storage**: All configuration stored in SQLite database with Docker volume support
 
 ## 🚀 Quick Start
@@ -41,12 +42,20 @@ docker-compose up -d
 http://localhost:5000
 ```
 
-5. Configure settings:
+5. **First-Time Setup**:
+   - On first access, you'll be redirected to the login page to create an admin account
+   - You have 5 minutes from application startup to complete this setup
+   - Enter a username and click "Create Account with Passkey"
+   - Follow your browser's prompts to register a passkey (fingerprint, face ID, or device PIN)
+   - Once registered, you'll be logged in automatically
+   - If the 5-minute window expires, restart the application to create the admin account
+
+6. Configure settings:
    - Navigate to http://localhost:5000/settings
    - Enter your Cloudflare, Redis, UniFi, and Home Assistant credentials
    - Save settings
 
-6. Add services:
+7. Add services:
    - Click "Add Service" on the home page
    - Configure each service with:
      - Service Name (e.g., "Jellyfin")
@@ -146,7 +155,7 @@ Configure these via the Web UI at `/settings`:
 
 **Home Assistant** (optional):
 - URL
-- Entity ID
+- Entity ID (Global Fallback) - Used if a service doesn't specify its own entity ID
 - Long-lived Access Token
 
 ### Service Configuration
@@ -157,6 +166,63 @@ Each service requires:
 - **Service Name**: Traefik service name (e.g., "jellyfin-service")
 - **Target URL**: Internal URL of the service (e.g., "http://192.168.1.10:8096")
 - **Subdomain Prefix**: Short prefix for rotating URLs (e.g., "jf")
+- **Home Assistant Entity ID** (optional): Specific entity ID for this service. If left empty, the global entity ID will be used.
+
+## 🔐 Authentication & Security
+
+### Passkey Authentication
+
+The application uses **WebAuthn** (passkeys) for secure, passwordless authentication:
+
+- **No passwords to remember or store**: Uses your device's built-in biometric authentication (fingerprint, face recognition) or PIN
+- **Phishing-resistant**: Passkeys are cryptographically bound to your domain
+- **Hardware-backed security**: Private keys never leave your device
+- **Easy setup**: Just enter a username and follow your browser's prompts
+
+**Supported authentication methods:**
+- Fingerprint readers
+- Face recognition (Face ID, Windows Hello)
+- Device PIN or pattern
+- Security keys (YubiKey, etc.)
+
+**Browser requirements:**
+- Chrome/Edge 67+
+- Firefox 60+
+- Safari 13+
+- Opera 54+
+
+**First-time setup:**
+1. Navigate to the web UI (e.g., http://localhost:5000)
+2. Enter a username for your admin account
+3. Click "Create Account with Passkey"
+4. Follow your browser's prompts to register your biometric/PIN
+
+**Subsequent logins:**
+1. Enter your username
+2. Click "Sign In with Passkey"
+3. Authenticate with your biometric/PIN
+
+### Environment Variables for WebAuthn
+
+**For development (localhost):**
+- No configuration needed! The application automatically detects the origin (localhost, 127.0.0.1, etc.) from your browser request
+- Supports `http://localhost:5000`, `http://127.0.0.1:5000`, and any other localhost-like addresses
+- Works out of the box for local testing
+
+**For production (custom domain/reverse proxy):**
+When deploying behind a reverse proxy or with a custom domain, set these environment variables:
+
+- `RP_ID`: Your domain (e.g., `example.com`)
+- `ORIGIN`: Full URL of your application (e.g., `https://example.com`)
+- `SETUP_WINDOW_SECONDS`: Time window in seconds for initial admin account creation (default: 300 = 5 minutes)
+
+Example Docker Compose:
+```yaml
+environment:
+  - RP_ID=traefik.example.com
+  - ORIGIN=https://traefik.example.com
+  - SETUP_WINDOW_SECONDS=300
+```
 
 ## 🔄 Migrating from Single Service
 
@@ -178,10 +244,13 @@ volumes:
 
 ## 🔒 Security Notes
 
+- **Passkey authentication required**: All routes are protected with WebAuthn passkey authentication
+- **Localhost development**: Automatically works with localhost, 127.0.0.1, and other local addresses - no configuration needed
 - Store sensitive credentials securely - they are saved in the SQLite database
 - Consider using Docker secrets or environment variables for production deployments
-- The web UI has no authentication - use behind a reverse proxy with auth if exposed
 - Rotating URLs provide security through obscurity - they are temporary by design
+- Passkeys are hardware-backed and phishing-resistant
+- For production use behind HTTPS, set `RP_ID` and `ORIGIN` environment variables correctly
 
 ## 🏗️ Architecture
 

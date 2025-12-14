@@ -7,9 +7,33 @@ import os
 import sys
 import argparse
 import urllib3
+from urllib.parse import urlparse
+import json
+import secrets
+import time
+import base64
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from webauthn import (
+    generate_registration_options,
+    verify_registration_response,
+    generate_authentication_options,
+    verify_authentication_response,
+    options_to_json,
+)
+from webauthn.helpers.structs import (
+    PublicKeyCredentialDescriptor,
+    AuthenticatorSelectionCriteria,
+    UserVerificationRequirement,
+    AuthenticatorAttachment,
+    ResidentKeyRequirement,
+)
+from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
+
+# Import DATA_DIR for secret key storage
+from database import DATA_DIR
 
 # Suppress InsecureRequestWarning for UniFi self-signed certs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -59,6 +83,23 @@ def migrate_env_to_db():
                 subdomain_prefix="jf"
             )
             migrated = True
+    
+    # Set defaults for new settings if they don't exist
+    if not db.get_setting("FIREWALL_TYPE"):
+        # Default to unifi if UNIFI_HOST is set, otherwise none
+        if db.get_setting("UNIFI_HOST"):
+            db.set_setting("FIREWALL_TYPE", "unifi")
+        else:
+            db.set_setting("FIREWALL_TYPE", "none")
+        migrated = True
+    
+    if not db.get_setting("HASS_ENABLED"):
+        # Default to enabled if HASS_URL is set, otherwise disabled
+        if db.get_setting("HASS_URL"):
+            db.set_setting("HASS_ENABLED", "1")
+        else:
+            db.set_setting("HASS_ENABLED", "0")
+        migrated = True
     
     if migrated:
         print("✅ Migrated settings from .env to database")
@@ -132,18 +173,26 @@ def cf_request(method, endpoint, data=None):
         return None
     return response.json()
 
-def update_hass(state, service_name="Service"):
+def update_hass(state, service_name="Service", hass_entity_id=None):
+    # Check if Home Assistant integration is enabled
+    hass_enabled = get_setting("HASS_ENABLED", required=False)
+    if hass_enabled == "0":
+        return  # HA integration disabled
+    
     hass_url = get_setting("HASS_URL", required=False)
-    hass_entity = get_setting("HASS_ENTITY_ID", required=False)
     hass_token = get_setting("HASS_TOKEN", required=False)
     
-    if not hass_url or not hass_entity or not hass_token:
-        return  # HA integration disabled
+    # Use provided entity ID or fall back to global setting (for backward compatibility)
+    if not hass_entity_id:
+        hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
+    
+    if not hass_url or not hass_entity_id or not hass_token:
+        return  # HA integration disabled or not configured
     
     headers = {"Authorization": f"Bearer {hass_token}", "Content-Type": "application/json"}
     try:
         response = requests.post(
-            f"{hass_url}/api/states/{hass_entity}",
+            f"{hass_url}/api/states/{hass_entity_id}",
             headers=headers,
             json={"state": state, "attributes": {"service": service_name}},
             timeout=5
@@ -157,6 +206,11 @@ def update_hass(state, service_name="Service"):
 
 def check_unifi_rule():
     """Reads the current status of the UniFi Port Forward rule."""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        return None
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
@@ -191,6 +245,12 @@ def check_unifi_rule():
 
 def toggle_unifi(enable_rule):
     """Logs into UDM Pro and toggles the Port Forwarding Rule"""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        print("⚠️ Firewall control disabled, skipping firewall control")
+        return True
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
@@ -363,7 +423,7 @@ def turn_off_service(service_id):
             print("   No DNS records found to clean.")
 
     print("🔹 Updating Home Assistant...")
-    update_hass("Disabled", service['name'])
+    update_hass("Disabled", service['name'], service.get('hass_entity_id'))
     
     # Update database
     db.update_service_status(service_id, False, None)
@@ -445,7 +505,7 @@ def turn_on_service(service_id):
     r.set(f"traefik/http/services/{service_name}/loadbalancer/servers/0/url", target_url)
 
     print("🔹 Updating Home Assistant...")
-    update_hass(f"https://{full_hostname}", service['name'])
+    update_hass(f"https://{full_hostname}", service['name'], service.get('hass_entity_id'))
     
     # Update database
     db.update_service_status(service_id, True, full_hostname)
@@ -484,15 +544,425 @@ def cmd_on():
 
 # ================= API / MAIN =================
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# Use persistent secret key from environment or generate one and store it
+SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
+if os.path.exists(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, 'rb') as f:
+        app.secret_key = f.read()
+else:
+    app.secret_key = os.urandom(24)
+    with open(SECRET_KEY_FILE, 'wb') as f:
+        f.write(app.secret_key)
+
+# Track application startup time for initial setup window
+STARTUP_TIME = time.time()
+# Parse and validate SETUP_WINDOW_SECONDS (default 5 minutes, min 60s, max 1 hour)
+try:
+    SETUP_WINDOW_SECONDS = int(os.environ.get('SETUP_WINDOW_SECONDS', '300'))
+    if SETUP_WINDOW_SECONDS < 60 or SETUP_WINDOW_SECONDS > 3600:
+        print(f"⚠️ SETUP_WINDOW_SECONDS={SETUP_WINDOW_SECONDS} is outside recommended range (60-3600). Using default 300.")
+        SETUP_WINDOW_SECONDS = 300
+except ValueError:
+    print(f"⚠️ Invalid SETUP_WINDOW_SECONDS value. Using default 300.")
+    SETUP_WINDOW_SECONDS = 300
+
+def is_in_setup_window():
+    """Check if we're still in the setup window after startup."""
+    return (time.time() - STARTUP_TIME) < SETUP_WINDOW_SECONDS
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Custom unauthorized handler
+@login_manager.unauthorized_handler
+def unauthorized():
+    # During setup window with no users, redirect to login without message
+    if db.count_users() == 0 and is_in_setup_window():
+        return redirect(url_for('login'))
+    # Otherwise show the default message
+    flash('Please log in to access this page.', 'warning')
+    return redirect(url_for('login'))
+
+class User(UserMixin):
+    def __init__(self, user_id, username):
+        self.id = user_id
+        self.username = username
+
+@login_manager.user_loader
+def load_user(user_id):
+    user = db.get_user(int(user_id))
+    if user:
+        return User(user['id'], user['username'])
+    return None
+
+# RP (Relying Party) settings for WebAuthn
+RP_ID = os.environ.get('RP_ID', 'localhost')
+RP_NAME = "Traefik Route Control"
+ORIGIN = os.environ.get('ORIGIN', f'http://localhost:5000')
+
+def get_expected_origin():
+    """
+    Get the expected origin for WebAuthn operations.
+    For development, dynamically determine based on request to support localhost/127.0.0.1/0.0.0.0.
+    For production with ORIGIN set, use the configured ORIGIN.
+    """
+    # If ORIGIN is explicitly set via environment variable (not default), use it
+    if 'ORIGIN' in os.environ:
+        return ORIGIN
+    
+    # For development (default config), dynamically determine origin from request
+    # This allows localhost, 127.0.0.1, and other local addresses to work
+    if has_request_context():
+        scheme = request.scheme  # http or https
+        host = request.host      # includes hostname and port
+        return f"{scheme}://{host}"
+    
+    # Fallback to configured ORIGIN
+    return ORIGIN
+
+def get_expected_rp_id():
+    """
+    Get the expected RP ID for WebAuthn operations.
+    For development with localhost-like addresses, use the hostname without port.
+    """
+    # If RP_ID is explicitly set via environment variable (not default), use it
+    if 'RP_ID' in os.environ:
+        return RP_ID
+    
+    # For development (default config), extract hostname from request
+    # This supports localhost, 127.0.0.1, etc.
+    if has_request_context():
+        host = request.host
+        # Use urlparse for robust hostname extraction that handles IPv6
+        # request.host includes port, so we need to parse it properly
+        # For IPv6: [::1]:5000 -> ::1
+        # For IPv4: 127.0.0.1:5000 -> 127.0.0.1
+        # For hostname: localhost:5000 -> localhost
+        if host.startswith('['):
+            # IPv6 address with brackets
+            hostname = host.split(']')[0][1:]  # Remove brackets
+        else:
+            # IPv4 or hostname
+            hostname = host.split(':')[0]
+        # For development, accept localhost-like addresses
+        # WebAuthn treats localhost, 127.0.0.1, and [::1] as secure contexts
+        return hostname
+    
+    # Fallback to configured RP_ID
+    return RP_ID
 
 # Web UI Routes
+@app.route('/login', methods=['GET'])
+def login():
+    # Check if this is initial setup (no users exist)
+    is_setup = db.count_users() == 0
+    
+    # Check if we're in the setup window
+    in_setup_window = is_in_setup_window() if is_setup else False
+    
+    # If setup required but window expired, show warning
+    setup_expired = is_setup and not in_setup_window
+    
+    return render_template('login.html', 
+                          is_setup=is_setup, 
+                          in_setup_window=in_setup_window,
+                          setup_expired=setup_expired)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('login'))
+
+# WebAuthn routes
+@app.route('/auth/register/begin', methods=['POST'])
+def register_begin():
+    # Only allow registration during setup window if no users exist
+    if db.count_users() == 0 and not is_in_setup_window():
+        return jsonify({"error": "Setup window expired. Please restart the application."}), 410
+    
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    
+    # Check if user already exists
+    existing_user = db.get_user_by_username(username)
+    if existing_user:
+        return jsonify({"error": "Username already exists"}), 400
+    
+    # Generate temporary user ID for this registration attempt
+    # We'll create the actual user only after successful verification
+    temp_user_id = random.randint(1000000, 9999999)
+    user_id_bytes = temp_user_id.to_bytes(4, byteorder='big')
+    
+    # Get dynamic RP_ID and origin for this request
+    rp_id = get_expected_rp_id()
+    origin = get_expected_origin()
+    
+    # Generate registration options
+    registration_options = generate_registration_options(
+        rp_id=rp_id,
+        rp_name=RP_NAME,
+        user_id=user_id_bytes,
+        user_name=username,
+        user_display_name=username,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
+            resident_key=ResidentKeyRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.PREFERRED
+        ),
+        supported_pub_key_algs=[
+            COSEAlgorithmIdentifier.ECDSA_SHA_256,
+            COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
+        ]
+    )
+    
+    # Store challenge, username, and context in session for verification
+    session['registration_challenge'] = registration_options.challenge.hex()
+    session['registration_username'] = username
+    session['registration_rp_id'] = rp_id
+    session['registration_origin'] = origin
+    
+    # Convert to JSON-serializable format
+    options_json = options_to_json(registration_options)
+    return jsonify(json.loads(options_json))
+
+@app.route('/auth/register/complete', methods=['POST'])
+def register_complete():
+    data = request.json
+    credential = data.get('credential')
+    
+    if not credential:
+        return jsonify({"error": "Credential required"}), 400
+    
+    challenge = session.get('registration_challenge')
+    username = session.get('registration_username')
+    rp_id = session.get('registration_rp_id')
+    origin = session.get('registration_origin')
+    
+    if not challenge or not username or not rp_id or not origin:
+        # Log what's missing for debugging (server-side only)
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not username: missing.append('username')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        print(f"⚠️ Registration failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
+    
+    try:
+        # Verify the registration response
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=bytes.fromhex(challenge),
+            expected_rp_id=rp_id,
+            expected_origin=origin,
+        )
+        
+        # Create user only after successful verification
+        user_id = db.add_user(username)
+        
+        # Store credential
+        db.add_credential(
+            user_id=user_id,
+            credential_id=verification.credential_id.hex(),
+            public_key=verification.credential_public_key.hex()
+        )
+        
+        # Log the user in
+        user = db.get_user(user_id)
+        login_user(User(user['id'], user['username']))
+        
+        # Clear session
+        session.pop('registration_challenge', None)
+        session.pop('registration_username', None)
+        session.pop('registration_rp_id', None)
+        session.pop('registration_origin', None)
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        # Clear session on error
+        session.pop('registration_challenge', None)
+        session.pop('registration_username', None)
+        session.pop('registration_rp_id', None)
+        session.pop('registration_origin', None)
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/auth/login/begin', methods=['POST'])
+def login_begin():
+    data = request.json
+    username = data.get('username')
+    
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    
+    # Check if user exists
+    user = db.get_user_by_username(username)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Get user credentials
+    credentials = db.get_credentials_for_user(user['id'])
+    if not credentials:
+        return jsonify({"error": "No credentials found"}), 404
+    
+    # Get dynamic RP_ID and origin for this request
+    rp_id = get_expected_rp_id()
+    origin = get_expected_origin()
+    
+    # Generate authentication options
+    allow_credentials = [
+        PublicKeyCredentialDescriptor(id=bytes.fromhex(cred['credential_id']))
+        for cred in credentials
+    ]
+    
+    authentication_options = generate_authentication_options(
+        rp_id=rp_id,
+        allow_credentials=allow_credentials,
+        user_verification=UserVerificationRequirement.PREFERRED
+    )
+    
+    # Store challenge, user_id, and context in session for verification
+    session['authentication_challenge'] = authentication_options.challenge.hex()
+    session['authentication_user_id'] = user['id']
+    session['authentication_rp_id'] = rp_id
+    session['authentication_origin'] = origin
+    
+    # Convert to JSON-serializable format
+    options_json = options_to_json(authentication_options)
+    return jsonify(json.loads(options_json))
+
+@app.route('/auth/login/complete', methods=['POST'])
+def login_complete():
+    data = request.json
+    credential = data.get('credential')
+    
+    if not credential:
+        return jsonify({"error": "Credential required"}), 400
+    
+    challenge = session.get('authentication_challenge')
+    user_id = session.get('authentication_user_id')
+    rp_id = session.get('authentication_rp_id')
+    origin = session.get('authentication_origin')
+    
+    if not challenge or not user_id or not rp_id or not origin:
+        # Log what's missing for debugging (server-side only)
+        missing = []
+        if not challenge: missing.append('challenge')
+        if not user_id: missing.append('user_id')
+        if not rp_id: missing.append('rp_id')
+        if not origin: missing.append('origin')
+        print(f"⚠️ Authentication failed: Missing session data: {', '.join(missing)}")
+        # Return generic error to client
+        return jsonify({"error": "Invalid or expired session. Please try again."}), 400
+    
+    try:
+        # Convert credential ID from base64 URL-safe to hex to match database storage
+        # The credential['rawId'] is base64 URL-safe encoded
+        cred_id_base64 = credential.get('rawId', '')
+        # Decode using urlsafe_b64decode which handles padding automatically
+        cred_id_bytes = base64.urlsafe_b64decode(cred_id_base64 + '==')  # Add padding for safety
+        cred_id_hex = cred_id_bytes.hex()
+        
+        # Get credential from database
+        db_credential = db.get_credential_by_id(cred_id_hex)
+        
+        if not db_credential or db_credential['user_id'] != user_id:
+            print(f"⚠️ Credential lookup failed: cred_id_hex={cred_id_hex}, db_credential={db_credential}")
+            return jsonify({"error": "Invalid credential"}), 400
+        
+        # Verify the authentication response
+        verification = verify_authentication_response(
+            credential=credential,
+            expected_challenge=bytes.fromhex(challenge),
+            expected_rp_id=rp_id,
+            expected_origin=origin,
+            credential_public_key=bytes.fromhex(db_credential['public_key']),
+            credential_current_sign_count=db_credential['sign_count']
+        )
+        
+        # Update sign count using the hex credential ID
+        db.update_credential_sign_count(cred_id_hex, verification.new_sign_count)
+        
+        # Log the user in
+        user = db.get_user(user_id)
+        login_user(User(user['id'], user['username']))
+        
+        # Clear session
+        session.pop('authentication_challenge', None)
+        session.pop('authentication_user_id', None)
+        session.pop('authentication_rp_id', None)
+        session.pop('authentication_origin', None)
+        
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        # Clear session on error
+        session.pop('authentication_challenge', None)
+        session.pop('authentication_user_id', None)
+        session.pop('authentication_rp_id', None)
+        session.pop('authentication_origin', None)
+        return jsonify({"error": str(e)}), 400
+
 @app.route('/')
 def index():
+    # Allow access during setup window if no users exist
+    if db.count_users() == 0 and is_in_setup_window():
+        return redirect(url_for('login'))
+    
+    # Otherwise require login
+    if not current_user.is_authenticated:
+        return login_manager.unauthorized()
+    
+    # Check if user needs onboarding
+    user = db.get_user(current_user.id)
+    if user and not user.get('onboarding_completed'):
+        return redirect(url_for('onboarding'))
+    
     services = db.get_all_services()
-    return render_template('index.html', services=services)
+    settings = db.get_all_settings()
+    return render_template('index.html', services=services, settings=settings)
+
+@app.route('/onboarding', methods=['GET'])
+@login_required
+def onboarding():
+    """Show onboarding wizard for new users"""
+    user = db.get_user(current_user.id)
+    if user and user.get('onboarding_completed'):
+        # Already completed onboarding, redirect to home
+        return redirect(url_for('index'))
+    
+    settings = db.get_all_settings()
+    return render_template('onboarding.html', settings=settings)
+
+@app.route('/onboarding/complete', methods=['POST'])
+@login_required
+def onboarding_complete():
+    """Complete onboarding and save all settings"""
+    try:
+        # Save all settings
+        for key in request.form:
+            db.set_setting(key, request.form[key])
+        
+        # Mark onboarding as completed
+        db.update_user_onboarding_status(current_user.id, True)
+        
+        flash('Setup completed successfully!', 'success')
+        return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('onboarding'))
 
 @app.route('/services/new', methods=['GET', 'POST'])
+@login_required
 def new_service():
     if request.method == 'POST':
         try:
@@ -501,7 +971,8 @@ def new_service():
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
-                subdomain_prefix=request.form['subdomain_prefix']
+                subdomain_prefix=request.form['subdomain_prefix'],
+                hass_entity_id=request.form.get('hass_entity_id') or None
             )
             flash('Service added successfully!', 'success')
             return redirect(url_for('index'))
@@ -511,6 +982,7 @@ def new_service():
     return render_template('service_form.html', service=None)
 
 @app.route('/services/<int:service_id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_service(service_id):
     service = db.get_service(service_id)
     if not service:
@@ -525,7 +997,8 @@ def edit_service(service_id):
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
-                subdomain_prefix=request.form['subdomain_prefix']
+                subdomain_prefix=request.form['subdomain_prefix'],
+                hass_entity_id=request.form.get('hass_entity_id') or None
             )
             flash('Service updated successfully!', 'success')
             return redirect(url_for('index'))
@@ -535,6 +1008,7 @@ def edit_service(service_id):
     return render_template('service_form.html', service=service)
 
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
     if request.method == 'POST':
         try:
@@ -551,10 +1025,12 @@ def settings():
 
 # API Routes
 @app.route('/api/status', methods=['GET'])
+@login_required
 def api_status():
     return jsonify(get_status())
 
 @app.route('/api/firewall-status', methods=['GET'])
+@login_required
 def api_firewall_status():
     firewall_status = "UNKNOWN"
     is_open = check_unifi_rule()
@@ -565,6 +1041,7 @@ def api_firewall_status():
     return jsonify({"status": firewall_status})
 
 @app.route('/api/services/<int:service_id>/on', methods=['POST'])
+@login_required
 def api_turn_on(service_id):
     result = turn_on_service(service_id)
     if "error" in result:
@@ -572,6 +1049,7 @@ def api_turn_on(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/off', methods=['POST'])
+@login_required
 def api_turn_off(service_id):
     result = turn_off_service(service_id)
     if "error" in result:
@@ -579,13 +1057,25 @@ def api_turn_off(service_id):
     return jsonify(result)
 
 @app.route('/api/services/<int:service_id>/rotate', methods=['POST'])
+@login_required
 def api_rotate(service_id):
     result = rotate_service(service_id)
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
 
+@app.route('/api/services/<int:service_id>/status', methods=['GET'])
+@login_required
+def api_service_status(service_id):
+    result = get_service_status(service_id)
+    if result is None:
+        return jsonify({"error": "Service not found"}), 404
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
+@login_required
 def api_delete_service(service_id):
     service = db.get_service(service_id)
     if not service:
@@ -600,6 +1090,7 @@ def api_delete_service(service_id):
 
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
+@login_required
 def api_legacy_turn_on():
     services = db.get_all_services()
     if not services:
@@ -610,6 +1101,7 @@ def api_legacy_turn_on():
     return jsonify(result)
 
 @app.route('/api/turn_off', methods=['POST'])
+@login_required
 def api_legacy_turn_off():
     services = db.get_all_services()
     if not services:
