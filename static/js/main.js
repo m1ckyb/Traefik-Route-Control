@@ -168,8 +168,8 @@ function showHassModal(serviceId, serviceName) {
       traefik_${serviceNameSlug}:
         command_on: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/on"
         command_off: "curl -X POST -s ${baseUrl}/api/services/${serviceId}/off"
-        command_state: "curl -s ${baseUrl}/api/status"
-        value_template: "${jinjaOpen} value_json.active_services | selectattr('id', 'equalto', ${serviceId}) | list | length > 0 ${jinjaClose}"
+        command_state: "curl -s ${baseUrl}/api/services/${serviceId}/status"
+        value_template: "${jinjaOpen} value_json.status == 'ONLINE' ${jinjaClose}"
         friendly_name: "Traefik ${safeServiceName}"`;
     
     document.getElementById('hassConfig').textContent = hassConfig;
