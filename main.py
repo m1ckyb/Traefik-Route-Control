@@ -159,6 +159,60 @@ def get_public_ip():
     except:
         return "Unknown"
 
+# List of well-known ports to avoid (from IANA registry)
+# https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+RESERVED_PORTS = set([
+    # System Ports (1-1023)
+    *range(1, 1024),
+    # Commonly used registered ports (1024-49151)
+    1080, 1194, 1433, 1434, 1521, 1701, 1723, 1883, 1900,
+    2049, 2082, 2083, 2086, 2087, 2095, 2096, 2375, 2376, 2377, 2379, 2380,
+    3000, 3001, 3002, 3003, 3004, 3005, 3006, 3128, 3268, 3269, 3306, 3389,
+    4443, 4444, 4567, 4789, 4822,
+    5000, 5001, 5432, 5433, 5555, 5672, 5900, 5901, 5984, 5985, 5986,
+    6379, 6443, 6666, 6667, 6697,
+    7000, 7001, 7077, 7443, 7474, 7687,
+    8000, 8001, 8002, 8003, 8004, 8005, 8006, 8007, 8008, 8009,
+    8080, 8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089,
+    8090, 8091, 8092, 8093, 8094, 8095, 8096, 8097, 8098, 8099,
+    8123, 8180, 8181, 8200, 8243, 8280, 8281, 8443, 8444, 8530, 8531, 8545, 8554, 8880, 8888, 8889,
+    9000, 9001, 9002, 9003, 9009, 9042, 9090, 9091, 9092, 9093, 9094, 9095, 9096, 9100, 9200, 9300, 9418, 9443,
+    10000, 10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10050, 10051,
+    11211, 11371,
+    15672,
+    16379,
+    17500,
+    19132, 19133,
+    20000,
+    25565, 25575,
+    27015, 27016, 27017, 27018, 27019,
+    28015, 28016, 28017,
+    32400,
+    33060,
+    35197,
+    37777,
+    50000, 50001, 50002,
+])
+
+def generate_random_port():
+    """
+    Generate a random port between 1024 and 65535, avoiding known assigned ports.
+    Returns a port number that is not in the RESERVED_PORTS set.
+    """
+    max_attempts = 100
+    for _ in range(max_attempts):
+        port = random.randint(1024, 65535)
+        if port not in RESERVED_PORTS:
+            # Also check if port is already in use by another active service
+            services = db.get_all_services()
+            ports_in_use = {s.get('current_port') for s in services if s.get('enabled') and s.get('current_port')}
+            if port not in ports_in_use:
+                return port
+    
+    # If we couldn't find a port after max_attempts, fall back to a random port
+    # This is extremely unlikely given the large range
+    return random.randint(40000, 60000)
+
 def count_active_routers():
     """Counts how many Traefik routers are currently active in Redis."""
     r = get_redis()
@@ -254,8 +308,14 @@ def check_unifi_rule():
     except Exception:
         return None # Connection error
 
-def toggle_unifi(enable_rule):
-    """Logs into UDM Pro and toggles the Port Forwarding Rule"""
+def toggle_unifi(enable_rule, forward_port=None):
+    """
+    Logs into UDM Pro and toggles the Port Forwarding Rule.
+    
+    Args:
+        enable_rule: Boolean to enable/disable the rule
+        forward_port: Optional port number to update in the rule
+    """
     # Check if firewall control is enabled
     firewall_type = get_setting("FIREWALL_TYPE", required=False)
     if firewall_type == "none":
@@ -307,17 +367,32 @@ def toggle_unifi(enable_rule):
         print(f"❌ Error: UniFi Rule '{unifi_rule_name}' not found!")
         return False
 
-    if target_rule["enabled"] == enable_rule:
-        print(f"   UniFi rule is already {'ENABLED' if enable_rule else 'DISABLED'}.")
+    # Track what changed
+    changes = []
+    if target_rule["enabled"] != enable_rule:
+        changes.append(f"enabled={'ENABLED' if enable_rule else 'DISABLED'}")
+    
+    # Update the rule
+    target_rule["enabled"] = enable_rule
+    
+    # Update the forward port if provided
+    if forward_port is not None and enable_rule:
+        old_port = target_rule.get("fwd_port", "unknown")
+        if old_port != forward_port:
+            target_rule["fwd_port"] = str(forward_port)
+            changes.append(f"port={forward_port}")
+            print(f"   Updating port forwarding: {old_port} → {forward_port}")
+    
+    if not changes:
+        print(f"   UniFi rule is already configured correctly.")
         return True
 
-    target_rule["enabled"] = enable_rule
     try:
         rule_id = target_rule["_id"]
         resp = session.put(f"{pf_url}/{rule_id}", json=target_rule, headers=headers, timeout=10)
         
         if resp.status_code == 200:
-            print(f"✅ UniFi Rule '{unifi_rule_name}' set to {'ENABLED' if enable_rule else 'DISABLED'}.")
+            print(f"✅ UniFi Rule '{unifi_rule_name}' updated: {', '.join(changes)}.")
             return True
         else:
             print(f"❌ Failed to update rule: {resp.text}")
@@ -378,12 +453,16 @@ def get_service_status(service_id):
     
     if current_rule:
         host = current_rule.replace("Host(`", "").replace("`)", "")
-        return {
+        result = {
             "status": "ONLINE",
             "hostname": host,
             "full_url": f"https://{host}",
             "service": service
         }
+        # Include port if available
+        if service.get('current_port'):
+            result['port'] = service['current_port']
+        return result
     else:
         return {
             "status": "OFFLINE",
@@ -450,7 +529,12 @@ def turn_on_service(service_id):
     
     print(f"\n🚀 === ENABLING {service['name']} ===")
     
-    if not toggle_unifi(True):
+    # Generate random port
+    random_port = generate_random_port()
+    print(f"   Generated random port: {random_port}")
+    
+    # Update UniFi with the new port
+    if not toggle_unifi(True, random_port):
         print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
 
     domain_root = get_setting("DOMAIN_ROOT")
@@ -464,6 +548,7 @@ def turn_on_service(service_id):
     
     print(f"   Service: {service['name']}")
     print(f"   Target:  {full_hostname}")
+    print(f"   Port:    {random_port}")
     print(f"   IP:      {public_ip}")
 
     print("🔹 Creating DNS Record...")
@@ -482,11 +567,19 @@ def turn_on_service(service_id):
         ruleset_id = ruleset_data.get('result', {}).get('id')
 
         if target_rule:
+            # Update action_parameters to include the port rewrite
+            action_params = target_rule.get('action_parameters', {})
+            
+            # Set the destination port for origin
+            if 'origin' not in action_params:
+                action_params['origin'] = {}
+            action_params['origin']['port'] = random_port
+            
             update_data = {
                 "expression": f"http.host eq \"{full_hostname}\"",
                 "description": origin_rule_name,
                 "action": target_rule['action'],
-                "action_parameters": target_rule['action_parameters'],
+                "action_parameters": action_params,
                 "enabled": True
             }
             cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
@@ -518,11 +611,11 @@ def turn_on_service(service_id):
     print("🔹 Updating Home Assistant...")
     update_hass(f"https://{full_hostname}", service['name'], service.get('hass_entity_id'))
     
-    # Update database
-    db.update_service_status(service_id, True, full_hostname)
+    # Update database with hostname and port
+    db.update_service_status(service_id, True, full_hostname, random_port)
 
-    print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname}\n")
-    return {"message": f"{service['name']} enabled successfully", "url": f"https://{full_hostname}"}
+    print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname} (Port: {random_port})\n")
+    return {"message": f"{service['name']} enabled successfully", "url": f"https://{full_hostname}", "port": random_port}
 
 def rotate_service(service_id):
     """Rotate URL for a service (turn off then on)"""
