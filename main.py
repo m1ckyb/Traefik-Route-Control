@@ -45,10 +45,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
 
 # Constants
-REQUIRED_SETTINGS = [
-    "CF_API_TOKEN", "CF_ZONE_ID", "DOMAIN_ROOT", "REDIS_HOST",
-    "UNIFI_HOST", "UNIFI_USER", "UNIFI_PASS", "UNIFI_RULE_NAME"
-]
+# Settings are now stored in database and configured via web UI
+# No longer required at startup
+REQUIRED_SETTINGS = []
 
 def migrate_env_to_db():
     """Migrate settings from .env file to database (one-time)."""
@@ -112,13 +111,19 @@ if os.path.exists(env_path):
     migrate_env_to_db()
 
 def get_setting(key, required=True):
-    """Get a setting from database."""
+    """Get a setting from database.
+    
+    Args:
+        key: The setting key to retrieve
+        required: Documentation hint only (no longer enforced at startup).
+                  Validation happens at point of use.
+    
+    Returns:
+        The setting value or None if not found
+    """
     value = db.get_setting(key)
-    if not value and required:
-        print(f"❌ Configuration Error: '{key}' is missing from settings")
-        if key in REQUIRED_SETTINGS:
-            print(f"   Please configure settings via the web UI at /settings")
-            return None
+    # Settings are now optional at startup and configured via web UI
+    # No longer print errors for missing settings during startup
     return value
 
 # API Settings
@@ -129,6 +134,10 @@ API_PORT = int(os.getenv("API_PORT", 5000))
 def get_redis():
     try:
         redis_host = get_setting("REDIS_HOST")
+        if not redis_host:
+            print("⚠️ Redis not configured")
+            return None
+        
         redis_port = int(get_setting("REDIS_PORT", required=False) or "6379")
         redis_pass = get_setting("REDIS_PASS", required=False)
         
