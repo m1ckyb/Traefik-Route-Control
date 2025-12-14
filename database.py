@@ -57,6 +57,18 @@ def init_db():
         """)
         
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                key_hash TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        """)
+        
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -83,6 +95,24 @@ def init_db():
             if 'onboarding_completed' not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN onboarding_completed INTEGER DEFAULT 0")
             conn.execute("INSERT INTO schema_version (version) VALUES (2)")
+        
+        # Migration 3: Create api_keys table
+        if current_version < 3:
+            # Check if table exists
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='api_keys'")
+            if not cursor.fetchone():
+                conn.execute("""
+                    CREATE TABLE api_keys (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        key_hash TEXT NOT NULL UNIQUE,
+                        name TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_used_at TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                    )
+                """)
+            conn.execute("INSERT INTO schema_version (version) VALUES (3)")
         
         conn.commit()
 
@@ -265,4 +295,44 @@ def delete_credential(credential_id):
     """Delete a credential."""
     with get_db() as conn:
         conn.execute("DELETE FROM webauthn_credentials WHERE credential_id = ?", (credential_id,))
+        conn.commit()
+
+# API Key operations
+def add_api_key(user_id, key_hash, name):
+    """Add a new API key."""
+    with get_db() as conn:
+        cursor = conn.execute("""
+            INSERT INTO api_keys (user_id, key_hash, name)
+            VALUES (?, ?, ?)
+        """, (user_id, key_hash, name))
+        conn.commit()
+        return cursor.lastrowid
+
+def get_api_keys_for_user(user_id):
+    """Get all API keys for a user."""
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id, name, created_at, last_used_at FROM api_keys WHERE user_id = ?", (user_id,))
+        return [dict(row) for row in cursor.fetchall()]
+
+def get_api_key_by_hash(key_hash):
+    """Get an API key by its hash."""
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM api_keys WHERE key_hash = ?", (key_hash,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+def update_api_key_last_used(key_hash):
+    """Update the last used timestamp for an API key."""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE api_keys 
+            SET last_used_at = CURRENT_TIMESTAMP
+            WHERE key_hash = ?
+        """, (key_hash,))
+        conn.commit()
+
+def delete_api_key(key_id):
+    """Delete an API key."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM api_keys WHERE id = ?", (key_id,))
         conn.commit()

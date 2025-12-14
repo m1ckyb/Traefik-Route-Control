@@ -8,6 +8,7 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 
 - **Multi-Service Management**: Control multiple services (Jellyfin, Sonarr, Radarr, etc.) from a single web interface
 - **Passkey Authentication**: Secure login with WebAuthn passkey support (biometric or PIN-based authentication)
+- **API Key Support**: Generate API keys for programmatic access via curl, scripts, or automation tools
 - **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
 - **Web UI Configuration**: Configure all settings and services through an intuitive web interface - no .env files needed
 - **Rotating Subdomains**: Generates a random URL (e.g., https://jf-k92m1x0p.domain.com) every time you enable a service
@@ -98,10 +99,41 @@ The primary way to use this application is through the web interface at http://l
 
 ### API Endpoints
 
-The application provides a REST API for programmatic control:
+The application provides a REST API for programmatic control.
+
+#### Authentication
+
+API endpoints support two authentication methods:
+
+1. **Session-based authentication** (for web UI): Use your browser session after logging in with passkeys
+2. **API Key authentication** (for programmatic access): Include an `X-API-Key` header in your requests
+
+To create an API key:
+1. Log in to the web UI
+2. Navigate to "API Keys" in the top menu
+3. Create a new API key with a descriptive name
+4. Copy the generated key (it will only be shown once)
+
+Example usage:
+```bash
+# Using curl with API key
+curl -X GET http://localhost:5000/api/status \
+  -H "X-API-Key: your-api-key-here"
+
+# Turn on a service
+curl -X POST http://localhost:5000/api/services/1/on \
+  -H "X-API-Key: your-api-key-here"
+
+# Get service status
+curl -X GET http://localhost:5000/api/services/1/status \
+  -H "X-API-Key: your-api-key-here"
+```
+
+#### Available Endpoints
 
 - `GET /api/status` - Get overall system status
 - `GET /api/firewall-status` - Get firewall status
+- `GET /api/services/{id}/status` - Get status of a specific service
 - `POST /api/services/{id}/on` - Turn on a specific service
 - `POST /api/services/{id}/off` - Turn off a specific service
 - `POST /api/services/{id}/rotate` - Rotate URL for a service
