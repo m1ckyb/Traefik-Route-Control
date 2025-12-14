@@ -45,10 +45,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
 
 # Constants
-REQUIRED_SETTINGS = [
-    "CF_API_TOKEN", "CF_ZONE_ID", "DOMAIN_ROOT", "REDIS_HOST",
-    "UNIFI_HOST", "UNIFI_USER", "UNIFI_PASS", "UNIFI_RULE_NAME"
-]
+# Settings are now stored in database and configured via web UI
+# No longer required at startup
+REQUIRED_SETTINGS = []
 
 def migrate_env_to_db():
     """Migrate settings from .env file to database (one-time)."""
@@ -114,11 +113,8 @@ if os.path.exists(env_path):
 def get_setting(key, required=True):
     """Get a setting from database."""
     value = db.get_setting(key)
-    if not value and required:
-        print(f"❌ Configuration Error: '{key}' is missing from settings")
-        if key in REQUIRED_SETTINGS:
-            print(f"   Please configure settings via the web UI at /settings")
-            return None
+    # Settings are now optional at startup and configured via web UI
+    # No longer print errors for missing settings during startup
     return value
 
 # API Settings
