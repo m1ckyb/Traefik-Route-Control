@@ -114,6 +114,14 @@ def init_db():
                 """)
             conn.execute("INSERT INTO schema_version (version) VALUES (3)")
         
+        # Migration 4: Add current_port column to services table
+        if current_version < 4:
+            cursor = conn.execute("PRAGMA table_info(services)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'current_port' not in columns:
+                conn.execute("ALTER TABLE services ADD COLUMN current_port INTEGER")
+            conn.execute("INSERT INTO schema_version (version) VALUES (4)")
+        
         conn.commit()
 
 @contextmanager
@@ -174,14 +182,14 @@ def delete_service(service_id):
         conn.execute("DELETE FROM services WHERE id = ?", (service_id,))
         conn.commit()
 
-def update_service_status(service_id, enabled, current_hostname=None):
-    """Update service enabled status and current hostname."""
+def update_service_status(service_id, enabled, current_hostname=None, current_port=None):
+    """Update service enabled status, current hostname, and current port."""
     with get_db() as conn:
         conn.execute("""
             UPDATE services 
-            SET enabled = ?, current_hostname = ?, updated_at = CURRENT_TIMESTAMP
+            SET enabled = ?, current_hostname = ?, current_port = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (1 if enabled else 0, current_hostname, service_id))
+        """, (1 if enabled else 0, current_hostname, current_port, service_id))
         conn.commit()
 
 # Settings CRUD operations

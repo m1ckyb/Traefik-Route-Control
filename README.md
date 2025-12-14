@@ -12,9 +12,10 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 - **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
 - **Web UI Configuration**: Configure all settings and services through an intuitive web interface - no .env files needed
 - **Rotating Subdomains**: Generates a random URL (e.g., https://jf-k92m1x0p.domain.com) every time you enable a service
+- **Random Port Generation**: Automatically generates a unique random port (1024-65535) for each service activation, avoiding known assigned ports for enhanced security
 - **Cloudflare Integration**: Automatically creates DNS records and updates Origin Rules (Port Rewrites)
 - **Traefik Dynamic Routing**: Uses Redis to inject routing rules into Traefik without restarting containers
-- **UniFi Firewall Control**: Automatically opens the specific Port Forwarding rule on your UDM Pro only when services are active
+- **UniFi Firewall Control**: Automatically opens the specific Port Forwarding rule on your UDM Pro with dynamic port assignment
 - **Multi-Service Safety**: Checks if other services are using the port before closing the firewall
 - **Persistent Storage**: All configuration stored in SQLite database with Docker volume support
 
@@ -281,8 +282,26 @@ volumes:
 - Store sensitive credentials securely - they are saved in the SQLite database
 - Consider using Docker secrets or environment variables for production deployments
 - Rotating URLs provide security through obscurity - they are temporary by design
+- **Random port assignment**: Each service activation generates a unique random port (1024-65535), avoiding 1100+ known assigned ports from the IANA registry
 - Passkeys are hardware-backed and phishing-resistant
 - For production use behind HTTPS, set `RP_ID` and `ORIGIN` environment variables correctly
+
+## 🎲 Random Port Feature
+
+When you enable a service, the application automatically:
+
+1. **Generates a random port** between 1024 and 65535
+2. **Avoids known assigned ports** including:
+   - System ports (1-1023)
+   - Common service ports (HTTP, HTTPS, SSH, MySQL, Redis, etc.)
+   - Ports already in use by other active services
+3. **Updates UniFi** port forwarding rule with the new port
+4. **Updates Cloudflare** Origin Rules to route traffic to the new port
+5. **Displays the port** in the service status on the web UI
+
+This provides an additional layer of security by making it harder to predict which port your service is using at any given time. The port changes each time you enable a service (or rotate its URL).
+
+**Example**: When you enable Jellyfin, it might use port 54231 the first time, then port 12847 when you rotate it, and so on.
 
 ## 🏗️ Architecture
 
