@@ -1181,10 +1181,8 @@ def create_api_key():
         # Store in database
         db.add_api_key(current_user.id, key_hash, name)
         
-        # Return the key to the user (only shown once)
-        flash(f'API Key created: {api_key}', 'success')
-        flash('Save this key now - it will not be shown again!', 'warning')
-        session['new_api_key'] = api_key  # Store temporarily to show on redirect
+        # Store temporarily in session to show on redirect (only shown once)
+        session['new_api_key'] = api_key
         
         return redirect(url_for('api_keys_page'))
     except Exception as e:
