@@ -76,6 +76,14 @@ def init_db():
                 conn.execute("ALTER TABLE services ADD COLUMN hass_entity_id TEXT")
             conn.execute("INSERT INTO schema_version (version) VALUES (1)")
         
+        # Migration 2: Add onboarding_completed column to users table
+        if current_version < 2:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'onboarding_completed' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN onboarding_completed INTEGER DEFAULT 0")
+            conn.execute("INSERT INTO schema_version (version) VALUES (2)")
+        
         conn.commit()
 
 @contextmanager
@@ -201,6 +209,16 @@ def delete_user(user_id):
     """Delete a user."""
     with get_db() as conn:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+
+def update_user_onboarding_status(user_id, completed=True):
+    """Update user's onboarding completion status."""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET onboarding_completed = ?
+            WHERE id = ?
+        """, (1 if completed else 0, user_id))
         conn.commit()
 
 def count_users():

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import json
 import secrets
 import time
+import base64
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -82,6 +83,23 @@ def migrate_env_to_db():
                 subdomain_prefix="jf"
             )
             migrated = True
+    
+    # Set defaults for new settings if they don't exist
+    if not db.get_setting("FIREWALL_TYPE"):
+        # Default to unifi if UNIFI_HOST is set, otherwise none
+        if db.get_setting("UNIFI_HOST"):
+            db.set_setting("FIREWALL_TYPE", "unifi")
+        else:
+            db.set_setting("FIREWALL_TYPE", "none")
+        migrated = True
+    
+    if not db.get_setting("HASS_ENABLED"):
+        # Default to enabled if HASS_URL is set, otherwise disabled
+        if db.get_setting("HASS_URL"):
+            db.set_setting("HASS_ENABLED", "1")
+        else:
+            db.set_setting("HASS_ENABLED", "0")
+        migrated = True
     
     if migrated:
         print("✅ Migrated settings from .env to database")
@@ -156,6 +174,11 @@ def cf_request(method, endpoint, data=None):
     return response.json()
 
 def update_hass(state, service_name="Service", hass_entity_id=None):
+    # Check if Home Assistant integration is enabled
+    hass_enabled = get_setting("HASS_ENABLED", required=False)
+    if hass_enabled == "0":
+        return  # HA integration disabled
+    
     hass_url = get_setting("HASS_URL", required=False)
     hass_token = get_setting("HASS_TOKEN", required=False)
     
@@ -164,7 +187,7 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
         hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
     
     if not hass_url or not hass_entity_id or not hass_token:
-        return  # HA integration disabled
+        return  # HA integration disabled or not configured
     
     headers = {"Authorization": f"Bearer {hass_token}", "Content-Type": "application/json"}
     try:
@@ -183,6 +206,11 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
 
 def check_unifi_rule():
     """Reads the current status of the UniFi Port Forward rule."""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        return None
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
@@ -217,6 +245,12 @@ def check_unifi_rule():
 
 def toggle_unifi(enable_rule):
     """Logs into UDM Pro and toggles the Port Forwarding Rule"""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        print("⚠️ Firewall control disabled, skipping firewall control")
+        return True
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
@@ -831,11 +865,18 @@ def login_complete():
         return jsonify({"error": "Invalid or expired session. Please try again."}), 400
     
     try:
+        # Convert credential ID from base64 URL-safe to hex to match database storage
+        # The credential['rawId'] is base64 URL-safe encoded
+        cred_id_base64 = credential.get('rawId', '')
+        # Decode using urlsafe_b64decode which handles padding automatically
+        cred_id_bytes = base64.urlsafe_b64decode(cred_id_base64 + '==')  # Add padding for safety
+        cred_id_hex = cred_id_bytes.hex()
+        
         # Get credential from database
-        cred_id = credential.get('id')
-        db_credential = db.get_credential_by_id(cred_id)
+        db_credential = db.get_credential_by_id(cred_id_hex)
         
         if not db_credential or db_credential['user_id'] != user_id:
+            print(f"⚠️ Credential lookup failed: cred_id_hex={cred_id_hex}, db_credential={db_credential}")
             return jsonify({"error": "Invalid credential"}), 400
         
         # Verify the authentication response
@@ -848,8 +889,8 @@ def login_complete():
             credential_current_sign_count=db_credential['sign_count']
         )
         
-        # Update sign count
-        db.update_credential_sign_count(cred_id, verification.new_sign_count)
+        # Update sign count using the hex credential ID
+        db.update_credential_sign_count(cred_id_hex, verification.new_sign_count)
         
         # Log the user in
         user = db.get_user(user_id)
@@ -881,8 +922,43 @@ def index():
     if not current_user.is_authenticated:
         return login_manager.unauthorized()
     
+    # Check if user needs onboarding
+    user = db.get_user(current_user.id)
+    if user and not user.get('onboarding_completed'):
+        return redirect(url_for('onboarding'))
+    
     services = db.get_all_services()
     return render_template('index.html', services=services)
+
+@app.route('/onboarding', methods=['GET'])
+@login_required
+def onboarding():
+    """Show onboarding wizard for new users"""
+    user = db.get_user(current_user.id)
+    if user and user.get('onboarding_completed'):
+        # Already completed onboarding, redirect to home
+        return redirect(url_for('index'))
+    
+    settings = db.get_all_settings()
+    return render_template('onboarding.html', settings=settings)
+
+@app.route('/onboarding/complete', methods=['POST'])
+@login_required
+def onboarding_complete():
+    """Complete onboarding and save all settings"""
+    try:
+        # Save all settings
+        for key in request.form:
+            db.set_setting(key, request.form[key])
+        
+        # Mark onboarding as completed
+        db.update_user_onboarding_status(current_user.id, True)
+        
+        flash('Setup completed successfully!', 'success')
+        return redirect(url_for('index'))
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('onboarding'))
 
 @app.route('/services/new', methods=['GET', 'POST'])
 @login_required
