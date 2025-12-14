@@ -84,6 +84,23 @@ def migrate_env_to_db():
             )
             migrated = True
     
+    # Set defaults for new settings if they don't exist
+    if not db.get_setting("FIREWALL_TYPE"):
+        # Default to unifi if UNIFI_HOST is set, otherwise none
+        if db.get_setting("UNIFI_HOST"):
+            db.set_setting("FIREWALL_TYPE", "unifi")
+        else:
+            db.set_setting("FIREWALL_TYPE", "none")
+        migrated = True
+    
+    if not db.get_setting("HASS_ENABLED"):
+        # Default to enabled if HASS_URL is set, otherwise disabled
+        if db.get_setting("HASS_URL"):
+            db.set_setting("HASS_ENABLED", "1")
+        else:
+            db.set_setting("HASS_ENABLED", "0")
+        migrated = True
+    
     if migrated:
         print("✅ Migrated settings from .env to database")
 
@@ -157,6 +174,11 @@ def cf_request(method, endpoint, data=None):
     return response.json()
 
 def update_hass(state, service_name="Service", hass_entity_id=None):
+    # Check if Home Assistant integration is enabled
+    hass_enabled = get_setting("HASS_ENABLED", required=False)
+    if hass_enabled == "0":
+        return  # HA integration disabled
+    
     hass_url = get_setting("HASS_URL", required=False)
     hass_token = get_setting("HASS_TOKEN", required=False)
     
@@ -165,7 +187,7 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
         hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
     
     if not hass_url or not hass_entity_id or not hass_token:
-        return  # HA integration disabled
+        return  # HA integration disabled or not configured
     
     headers = {"Authorization": f"Bearer {hass_token}", "Content-Type": "application/json"}
     try:
@@ -184,6 +206,11 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
 
 def check_unifi_rule():
     """Reads the current status of the UniFi Port Forward rule."""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        return None
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
@@ -218,6 +245,12 @@ def check_unifi_rule():
 
 def toggle_unifi(enable_rule):
     """Logs into UDM Pro and toggles the Port Forwarding Rule"""
+    # Check if firewall control is enabled
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type == "none":
+        print("⚠️ Firewall control disabled, skipping firewall control")
+        return True
+    
     unifi_host = get_setting("UNIFI_HOST", required=False)
     unifi_user = get_setting("UNIFI_USER", required=False)
     unifi_pass = get_setting("UNIFI_PASS", required=False)
