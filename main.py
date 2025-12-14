@@ -126,7 +126,7 @@ def get_redis():
     try:
         redis_host = get_setting("REDIS_HOST")
         if not redis_host:
-            print(f"⚠️ Redis not configured")
+            print("⚠️ Redis not configured")
             return None
         
         redis_port = int(get_setting("REDIS_PORT", required=False) or "6379")
