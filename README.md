@@ -9,6 +9,7 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 - **Multi-Service Management**: Control multiple services (Jellyfin, Sonarr, Radarr, etc.) from a single web interface
 - **Passkey Authentication**: Secure login with WebAuthn passkey support (biometric or PIN-based authentication)
 - **API Key Support**: Generate API keys for programmatic access via curl, scripts, or automation tools
+- **Service Diagnostics & Repair**: Comprehensive diagnostic tools to identify and fix configuration issues (DNS, Traefik, Cloudflare, firewall)
 - **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
 - **Web UI Configuration**: Configure all settings and services through an intuitive web interface - no .env files needed
 - **Rotating Subdomains**: Generates a random URL (e.g., https://jf-k92m1x0p.domain.com) every time you enable a service
@@ -135,14 +136,68 @@ curl -X GET http://localhost:5000/api/services/1/status \
 - `GET /api/status` - Get overall system status
 - `GET /api/firewall-status` - Get firewall status
 - `GET /api/services/{id}/status` - Get status of a specific service
+- `GET /api/services/{id}/diagnose` - Run comprehensive diagnostics on a service
 - `POST /api/services/{id}/on` - Turn on a specific service
 - `POST /api/services/{id}/off` - Turn off a specific service
 - `POST /api/services/{id}/rotate` - Rotate URL for a service
+- `POST /api/services/{id}/repair` - Repair service configuration mismatches
 - `DELETE /api/services/{id}` - Delete a service
 
 Legacy endpoints (control first service):
 - `POST /api/turn_on` - Turn on first service
 - `POST /api/turn_off` - Turn off first service
+
+### Service Diagnostics
+
+The application includes comprehensive diagnostic tools to help troubleshoot service issues:
+
+**Web UI**: Click the "🔍 Diagnose" button on any enabled service to run a full diagnostic check. The diagnostics modal will show:
+- ✅ **Redis Connection**: Verifies connectivity to Redis/Traefik
+- ✅ **Traefik Router**: Checks if the router is configured correctly
+- ✅ **Traefik Service**: Validates backend URL configuration
+- ✅ **DNS Record**: Confirms DNS record exists in Cloudflare
+- ✅ **Origin Rule**: Checks Cloudflare Origin Rule configuration
+- ✅ **Firewall**: Verifies firewall rule status and port
+
+Each check will show:
+- ✅ Green checkmark for passing checks
+- ⚠️ Yellow warning for potential issues
+- ❌ Red X for failures
+- ℹ️ Blue info for informational messages
+
+If configuration mismatches are detected, you can click the "🔧 Repair Configuration" button to automatically fix them.
+
+**API**: Use `GET /api/services/{id}/diagnose` to get detailed diagnostic information in JSON format:
+
+```bash
+curl -X GET http://localhost:5000/api/services/1/diagnose \
+  -H "X-API-Key: your-api-key-here"
+```
+
+Example response:
+```json
+{
+  "service": {...},
+  "checks": {
+    "redis": {"status": "ok", "message": "Redis connection successful"},
+    "traefik_router": {"status": "ok", "hostname": "jf-abc123.example.com"},
+    "traefik_service": {
+      "status": "warning",
+      "message": "Service backend URL mismatch",
+      "expected": "http://192.168.10.125:8096",
+      "actual": "http://192.168.10.125:80"
+    },
+    "dns": {"status": "ok", "message": "DNS record exists"},
+    "firewall": {"status": "ok", "port": 54231}
+  }
+}
+```
+
+To repair configuration issues:
+```bash
+curl -X POST http://localhost:5000/api/services/1/repair \
+  -H "X-API-Key: your-api-key-here"
+```
 
 ### Command Line Interface
 

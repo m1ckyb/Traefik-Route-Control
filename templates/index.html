@@ -57,6 +57,9 @@
             <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
                 🔄 Rotate URL
             </button>
+            <button class="btn btn-info" onclick="diagnoseService({{ service.id }}, event)">
+                🔍 Diagnose
+            </button>
             {% else %}
             <button class="btn btn-success" onclick="toggleService({{ service.id }}, true, event)">
                 🚀 Turn On
@@ -90,6 +93,19 @@
                 <pre id="hassConfig"></pre>
             </div>
             <button class="btn btn-secondary" id="copy-hass-config-btn">📋 Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
+
+<!-- Diagnostics Modal -->
+<div id="diagnosticsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Service Diagnostics</h3>
+            <span class="modal-close" onclick="closeDiagnosticsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="diagnosticsContent"></div>
         </div>
     </div>
 </div>

@@ -544,12 +544,27 @@ def get_service_status(service_id):
     
     if current_rule:
         host = current_rule.replace("Host(`", "").replace("`)", "")
+        
+        # Check actual Redis configuration vs expected
+        actual_target_url = r.get(f"traefik/http/services/{service['service_name']}/loadbalancer/servers/0/url")
+        expected_target_url = service['target_url']
+        
+        # Check for configuration mismatch
+        config_mismatch = actual_target_url != expected_target_url
+        
         result = {
             "status": "ONLINE",
             "hostname": host,
             "full_url": f"https://{host}",
-            "service": service
+            "service": service,
+            "config_mismatch": config_mismatch
         }
+        
+        # Include diagnostic info if there's a mismatch
+        if config_mismatch:
+            result["actual_target_url"] = actual_target_url
+            result["expected_target_url"] = expected_target_url
+        
         # Include port if available
         if service.get('current_port'):
             result['port'] = service['current_port']
@@ -1418,6 +1433,196 @@ def api_service_status(service_id):
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
+
+@app.route('/api/services/<int:service_id>/repair', methods=['POST'])
+@api_key_or_login_required
+def api_repair_service(service_id):
+    """Repair service configuration by syncing database config to Redis/Traefik"""
+    service = db.get_service(service_id)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+    
+    # Only repair enabled services
+    if not service['enabled']:
+        return jsonify({"error": "Service must be enabled to repair"}), 400
+    
+    r = get_redis()
+    if not r:
+        return jsonify({"error": "Redis connection failed"}), 400
+    
+    # Check what's currently in Redis
+    current_rule = r.get(f"traefik/http/routers/{service['router_name']}/rule")
+    if not current_rule:
+        return jsonify({"error": "Service is not active in Traefik"}), 400
+    
+    # Get actual vs expected values
+    actual_target_url = r.get(f"traefik/http/services/{service['service_name']}/loadbalancer/servers/0/url")
+    expected_target_url = service['target_url']
+    
+    if actual_target_url == expected_target_url:
+        return jsonify({"message": "Service configuration is already correct", "target_url": expected_target_url})
+    
+    # Repair: Update Redis with correct target URL from database
+    r.set(f"traefik/http/services/{service['service_name']}/loadbalancer/servers/0/url", expected_target_url)
+    
+    print(f"🔧 Repaired {service['name']}: {actual_target_url} → {expected_target_url}")
+    
+    return jsonify({
+        "message": "Service configuration repaired successfully",
+        "old_target_url": actual_target_url,
+        "new_target_url": expected_target_url
+    })
+
+@app.route('/api/services/<int:service_id>/diagnose', methods=['GET'])
+@api_key_or_login_required
+def api_diagnose_service(service_id):
+    """Diagnose service configuration and connectivity issues"""
+    service = db.get_service(service_id)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+    
+    diagnostics = {
+        "service": service,
+        "checks": {}
+    }
+    
+    # Check Redis connection
+    r = get_redis()
+    if not r:
+        diagnostics["checks"]["redis"] = {"status": "fail", "message": "Redis connection failed"}
+        return jsonify(diagnostics), 400
+    else:
+        diagnostics["checks"]["redis"] = {"status": "ok", "message": "Redis connection successful"}
+    
+    # Check if service is enabled
+    if not service['enabled']:
+        diagnostics["checks"]["enabled"] = {"status": "info", "message": "Service is disabled"}
+        return jsonify(diagnostics)
+    
+    diagnostics["checks"]["enabled"] = {"status": "ok", "message": "Service is enabled"}
+    
+    # Check Traefik router configuration
+    current_rule = r.get(f"traefik/http/routers/{service['router_name']}/rule")
+    if not current_rule:
+        diagnostics["checks"]["traefik_router"] = {
+            "status": "fail", 
+            "message": "Router not found in Traefik/Redis"
+        }
+    else:
+        hostname = current_rule.replace("Host(`", "").replace("`)", "")
+        diagnostics["checks"]["traefik_router"] = {
+            "status": "ok",
+            "message": "Router configured correctly",
+            "hostname": hostname
+        }
+    
+    # Check Traefik service configuration
+    actual_target_url = r.get(f"traefik/http/services/{service['service_name']}/loadbalancer/servers/0/url")
+    expected_target_url = service['target_url']
+    
+    if not actual_target_url:
+        diagnostics["checks"]["traefik_service"] = {
+            "status": "fail",
+            "message": "Service backend not configured in Traefik"
+        }
+    elif actual_target_url != expected_target_url:
+        diagnostics["checks"]["traefik_service"] = {
+            "status": "warning",
+            "message": "Service backend URL mismatch",
+            "expected": expected_target_url,
+            "actual": actual_target_url
+        }
+    else:
+        diagnostics["checks"]["traefik_service"] = {
+            "status": "ok",
+            "message": "Service backend configured correctly",
+            "target_url": actual_target_url
+        }
+    
+    # Check DNS record
+    if service.get('current_hostname'):
+        domain_root = get_setting("DOMAIN_ROOT", required=False)
+        if domain_root:
+            subdomain = service['current_hostname'].replace(f".{domain_root}", "")
+            records = cf_request("GET", f"dns_records?type=A&name={subdomain}")
+            
+            if records and records.get('result'):
+                dns_record = records['result'][0]
+                diagnostics["checks"]["dns"] = {
+                    "status": "ok",
+                    "message": "DNS record exists",
+                    "name": dns_record['name'],
+                    "content": dns_record['content'],
+                    "proxied": dns_record['proxied']
+                }
+            else:
+                diagnostics["checks"]["dns"] = {
+                    "status": "fail",
+                    "message": "DNS record not found in Cloudflare",
+                    "expected_name": subdomain
+                }
+        else:
+            diagnostics["checks"]["dns"] = {
+                "status": "info",
+                "message": "Cannot check DNS - DOMAIN_ROOT not configured"
+            }
+    else:
+        diagnostics["checks"]["dns"] = {
+            "status": "info",
+            "message": "No current hostname - service may not have been activated yet"
+        }
+    
+    # Check Cloudflare Origin Rule
+    if service.get('current_hostname'):
+        origin_rule_base_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+        service_origin_rule_name = f"{origin_rule_base_name} - {service['name']}"
+        
+        ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
+        if ruleset_data:
+            rules = ruleset_data.get('result', {}).get('rules', [])
+            target_rule = next((r for r in rules if r.get('description') == service_origin_rule_name), None)
+            
+            if target_rule:
+                port = target_rule.get('action_parameters', {}).get('origin', {}).get('port')
+                diagnostics["checks"]["origin_rule"] = {
+                    "status": "ok",
+                    "message": "Origin rule exists",
+                    "port": port,
+                    "enabled": target_rule.get('enabled')
+                }
+            else:
+                diagnostics["checks"]["origin_rule"] = {
+                    "status": "warning",
+                    "message": "Origin rule not found",
+                    "expected_description": service_origin_rule_name
+                }
+        else:
+            diagnostics["checks"]["origin_rule"] = {
+                "status": "fail",
+                "message": "Cannot retrieve origin rules from Cloudflare"
+            }
+    
+    # Check firewall status
+    rule_info = check_unifi_rule()
+    if rule_info is None:
+        diagnostics["checks"]["firewall"] = {
+            "status": "info",
+            "message": "Firewall control not configured"
+        }
+    elif rule_info.get("enabled"):
+        diagnostics["checks"]["firewall"] = {
+            "status": "ok",
+            "message": "Firewall rule is enabled",
+            "port": rule_info.get("port")
+        }
+    else:
+        diagnostics["checks"]["firewall"] = {
+            "status": "warning",
+            "message": "Firewall rule is disabled",
+            "port": rule_info.get("port")
+        }
+    
+    return jsonify(diagnostics)
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
 @api_key_or_login_required
