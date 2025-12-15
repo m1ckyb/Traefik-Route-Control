@@ -86,7 +86,7 @@ body {
     background: var(--bg-input);
 }
 
-/* Alerts */
+/* Alerts - backgrounds use rgba for opacity, borders/text use CSS custom properties */
 .alert {
     padding: 1rem;
     border-radius: 0.5rem;
@@ -103,6 +103,13 @@ body {
     background: rgba(220, 38, 38, 0.1);
     border: 1px solid var(--danger);
     color: var(--danger);
+}
+
+/* Warning style for toast notifications and flash messages */
+.alert-warning {
+    background: rgba(234, 88, 12, 0.1);
+    border: 1px solid var(--warning);
+    color: var(--warning);
 }
 
 /* Header Row */
@@ -617,5 +624,16 @@ body {
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
     }
 }
