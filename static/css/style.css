@@ -910,7 +910,22 @@ input:checked + .slider:before {
     margin-top: auto;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
-    text-align: right;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     color: var(--text-dim);
     font-size: 0.875rem;
+}
+
+.footer-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-link:hover {
+    color: var(--text);
 }
