@@ -606,6 +606,143 @@ def sync_unifi_groups(session=None, base_url=None):
 
 # ================= UNIFI LOGIC =================
 
+def test_service_firewall(service_id):
+    """Checks if a specific service's IP/port are correctly represented in UniFi firewall groups."""
+    service = db.get_service(service_id)
+    if not service:
+        return {"error": "Service not found", "status_code": 404}
+
+    if not service['enabled']:
+        return {"info": "Service is disabled, so firewall rules do not apply."}
+
+    # Get UniFi settings
+    firewall_type = get_setting("FIREWALL_TYPE", required=False)
+    if firewall_type != "unifi":
+        return {"info": f"Firewall type is '{firewall_type}', not 'unifi'. No test performed."}
+
+    ip_group_name = get_setting("UNIFI_IP_GROUP_NAME", required=False)
+    port_group_name = get_setting("UNIFI_PORT_GROUP_NAME", required=False)
+    traefik_lan = get_setting("TRAEFIK_LAN_CIDR", required=False)
+    unifi_host = get_setting("UNIFI_HOST")
+    unifi_user = get_setting("UNIFI_USER")
+    unifi_pass = get_setting("UNIFI_PASS")
+
+    if not all([ip_group_name, port_group_name, unifi_host, unifi_user, unifi_pass]):
+        return {"error": "UniFi firewall groups or credentials are not fully configured.", "status_code": 400}
+
+    # 1. Determine expected state for the specific service
+    try:
+        parsed = urlparse(service['target_url'])
+        hostname = parsed.hostname
+        port = parsed.port
+        if not port:
+            port = 80 if parsed.scheme == 'http' else 443
+        
+        if not hostname:
+            return {"error": "Could not parse hostname from service target URL.", "status_code": 400}
+
+        service_ip = socket.gethostbyname(hostname)
+        service_port = str(port)
+    except Exception as e:
+        return {"error": f"Failed to resolve service IP/port: {e}", "status_code": 500}
+
+    # 2. Recalculate the complete desired state for all services
+    all_services = db.get_all_services()
+    overall_desired_ips = set()
+    overall_desired_ports = set()
+
+    for s in all_services:
+        if s['enabled']:
+            try:
+                s_parsed = urlparse(s['target_url'])
+                s_hostname, s_port = s_parsed.hostname, s_parsed.port
+                if not s_port:
+                    s_port = 80 if s_parsed.scheme == 'http' else 443
+                
+                if s_hostname and s_port:
+                    s_ip = socket.gethostbyname(s_hostname)
+                    s_in_lan = False
+                    if traefik_lan:
+                        if ipaddress.ip_address(s_ip) in ipaddress.ip_network(traefik_lan):
+                            s_in_lan = True
+                    
+                    if not s_in_lan:
+                        overall_desired_ips.add(s_ip)
+                        overall_desired_ports.add(str(s_port))
+            except Exception:
+                continue # Ignore services that can't be resolved
+
+    # 3. Connect to UniFi and get current state
+    base_url = f"https://{unifi_host}"
+    session = requests.Session()
+    session.verify = False
+    results = {}
+    
+    try:
+        resp = login_unifi_with_retry(session, base_url, unifi_user, unifi_pass)
+        if not resp or resp.status_code != 200:
+            return {"error": f"UniFi Login Failed: HTTP {resp.status_code if resp else 'N/A'}", "status_code": 500}
+
+        csrf_token = resp.headers.get("x-csrf-token")
+        if csrf_token:
+            session.headers.update({"X-CSRF-Token": csrf_token})
+
+        resp = session.get(f"{base_url}/proxy/network/api/s/default/rest/firewallgroup", timeout=10)
+        if resp.status_code != 200:
+            return {"error": "Failed to fetch firewall groups from UniFi.", "status_code": 500}
+        
+        groups = resp.json().get("data", [])
+        ip_group = next((g for g in groups if g.get("name") == ip_group_name), None)
+        port_group = next((g for g in groups if g.get("name") == port_group_name), None)
+        
+        # 4. Perform checks
+        
+        # IP Check
+        service_in_lan = False
+        if traefik_lan:
+            service_in_lan = ipaddress.ip_address(service_ip) in ipaddress.ip_network(traefik_lan)
+
+        if not ip_group:
+            results["ip_check"] = {"status": "fail", "message": f"IP Group '{ip_group_name}' not found."}
+        else:
+            current_ips = set(ip_group.get("members", []) or ip_group.get("group_members", []))
+            if service_in_lan:
+                if service_ip in current_ips:
+                    results["ip_check"] = {"status": "fail", "message": f"IP {service_ip} should be excluded (in LAN) but was found in the group."}
+                else:
+                    results["ip_check"] = {"status": "ok", "message": f"IP {service_ip} is correctly excluded from the group."}
+            else: # Not in LAN
+                if service_ip in current_ips:
+                    results["ip_check"] = {"status": "ok", "message": f"IP {service_ip} is correctly present in the group."}
+                else:
+                    results["ip_check"] = {"status": "fail", "message": f"IP {service_ip} is missing from the group."}
+
+        # Port Check
+        if not port_group:
+            results["port_check"] = {"status": "fail", "message": f"Port Group '{port_group_name}' not found."}
+        else:
+            current_ports = set(port_group.get("members", []) or port_group.get("group_members", []))
+            port_should_be_present = service_port in overall_desired_ports
+
+            if port_should_be_present:
+                if service_port in current_ports:
+                    results["port_check"] = {"status": "ok", "message": f"Port {service_port} is correctly present in the group."}
+                else:
+                    results["port_check"] = {"status": "fail", "message": f"Port {service_port} should be in the group, but is missing."}
+            else: # Port should not be present
+                if service_port in current_ports:
+                    results["port_check"] = {"status": "fail", "message": f"Port {service_port} should be excluded, but was found in the group."}
+                else:
+                    results["port_check"] = {"status": "ok", "message": f"Port {service_port} is correctly excluded from the group."}
+
+    except Exception as e:
+        return {"error": f"An unexpected error occurred during the test: {e}", "status_code": 500}
+    finally:
+        if session:
+            logout_unifi(session, base_url)
+    
+    return results
+
 def check_unifi_rule(session=None, base_url=None):
     """Reads the current status of the UniFi Port Forward rule.
     
@@ -2068,6 +2205,15 @@ def api_diagnose_service(service_id):
         }
     
     return jsonify(diagnostics)
+
+
+@app.route('/api/services/<int:service_id>/test-firewall', methods=['POST'])
+@api_key_or_login_required
+def api_test_service_firewall(service_id):
+    result = test_service_firewall(service_id)
+    status_code = result.pop("status_code", 200)
+    return jsonify(result), status_code
+
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
 @api_key_or_login_required
