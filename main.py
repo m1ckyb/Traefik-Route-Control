@@ -180,7 +180,8 @@ def check_port_open(port, timeout=10):
         
         if rule_info is None:
             # Firewall control is disabled or not configured
-            return {"open": True, "error": "Firewall control not configured - assuming port is accessible"}
+            # Return unknown status rather than assuming it's open
+            return {"open": None, "error": "Firewall control not configured - port status unknown"}
         
         if rule_info.get("enabled") and rule_info.get("port") == port:
             return {"open": True, "error": None}
@@ -665,7 +666,7 @@ def turn_on_service(service_id):
             # Create a new rule for this service
             # Try to get action from any existing rule as a template, or use default
             existing_action = "route"
-            if rules:
+            if rules and len(rules) > 0:
                 # Use the action from the first rule as a template
                 existing_action = rules[0].get('action', 'route')
             
@@ -727,12 +728,17 @@ def turn_on_service(service_id):
     time.sleep(1)  # Brief 1-second delay to allow firewall rule to propagate
     port_check = check_port_open(random_port)
     
-    if port_check.get("open"):
+    port_open = port_check.get("open")
+    if port_open is True:
         print(f"✅ Port {random_port} verified as accessible")
         port_status = "verified"
+    elif port_open is None:
+        error_msg = port_check.get("error", "Unknown error")
+        print(f"⚠️ Port status unknown: {error_msg}")
+        port_status = "unknown"
     else:
         error_msg = port_check.get("error", "Unknown error")
-        print(f"⚠️ Port verification inconclusive: {error_msg}")
+        print(f"⚠️ Port verification failed: {error_msg}")
         port_status = "unverified"
 
     print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname} (Port: {random_port})\n")
