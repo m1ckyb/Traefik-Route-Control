@@ -161,34 +161,31 @@ def get_public_ip():
 
 def check_port_open(port, timeout=10):
     """
-    Check if a port is open using an external port checking service.
+    Check if a port is open by verifying the UniFi firewall rule status.
+    
+    Note: This function checks if the firewall rule is enabled, not if the port
+    is actually accessible from the internet. A full external port check would 
+    require using third-party services which may have rate limits or reliability issues.
     
     Args:
         port: The port number to check
-        timeout: Timeout in seconds for the check
+        timeout: Timeout in seconds (unused, kept for API compatibility)
     
     Returns:
         dict: {"open": bool, "error": str or None}
     """
     try:
-        public_ip = get_public_ip()
-        if public_ip == "Unknown":
-            return {"open": False, "error": "Could not determine public IP"}
+        # Check if the UniFi rule is enabled with the correct port
+        rule_info = check_unifi_rule()
         
-        # Use a free port checking service
-        # Note: This checks if the port is reachable from the internet
-        check_url = f"https://api.ipify.org?format=json"  # Placeholder - we'll use a simple socket test
+        if rule_info is None:
+            # Firewall control is disabled or not configured
+            return {"open": True, "error": "Firewall control not configured - assuming port is accessible"}
         
-        # Alternative: Use a simple HTTP check to see if we can connect
-        # For now, we'll just return a placeholder that indicates we attempted the check
-        # In production, you might use services like:
-        # - https://www.yougetsignal.com/tools/open-ports/
-        # - https://portchecker.co/check
-        # But these would require parsing HTML or using their specific APIs
-        
-        # For now, let's do a basic connectivity check
-        # We'll assume if UniFi accepted the rule, the port is likely open
-        return {"open": True, "error": None}
+        if rule_info.get("enabled") and rule_info.get("port") == port:
+            return {"open": True, "error": None}
+        else:
+            return {"open": False, "error": f"Firewall rule shows port {rule_info.get('port', 'unknown')} instead of {port}"}
     except Exception as e:
         return {"open": False, "error": str(e)}
 
@@ -725,9 +722,9 @@ def turn_on_service(service_id):
     # Update database with hostname and port
     db.update_service_status(service_id, True, full_hostname, random_port)
 
-    # Check if port is open (give it a moment for firewall to update)
+    # Check if port is open (brief delay to allow firewall rule to propagate)
     print("🔹 Verifying port accessibility...")
-    time.sleep(2)  # Brief delay to allow firewall rule to propagate
+    time.sleep(1)  # Brief 1-second delay to allow firewall rule to propagate
     port_check = check_port_open(random_port)
     
     if port_check.get("open"):
