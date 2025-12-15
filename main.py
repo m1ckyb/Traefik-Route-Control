@@ -159,7 +159,7 @@ def get_public_ip():
     except:
         return "Unknown"
 
-def check_port_open(port, timeout=10):
+def check_port_open(port):
     """
     Check if a port is open by verifying the UniFi firewall rule status.
     
@@ -169,10 +169,12 @@ def check_port_open(port, timeout=10):
     
     Args:
         port: The port number to check
-        timeout: Timeout in seconds (unused, kept for API compatibility)
     
     Returns:
-        dict: {"open": bool, "error": str or None}
+        dict: {"open": bool or None, "error": str or None}
+              - open=True: Port confirmed accessible (firewall rule enabled with correct port)
+              - open=False: Port not accessible (firewall rule has issues)
+              - open=None: Port status unknown (firewall control not configured)
     """
     try:
         # Check if the UniFi rule is enabled with the correct port
@@ -453,7 +455,9 @@ def toggle_unifi(enable_rule, forward_port=None):
         print(f"❌ Error updating rule: {e}")
         return False
 
-# ================= CORE LOGIC =================
+# Default Cloudflare Origin Rule action type
+DEFAULT_ORIGIN_ACTION = "route"
+
 def get_status():
     """Get overall system status"""
     r = get_redis()
@@ -664,8 +668,8 @@ def turn_on_service(service_id):
             print(f"   Updated existing Origin Rule: {service_origin_rule_name}")
         else:
             # Create a new rule for this service
-            # Try to get action from any existing rule as a template, or use default 'route'
-            existing_action = rules[0].get('action', 'route') if rules else 'route'
+            # Try to get action from any existing rule as a template, or use default
+            existing_action = rules[0].get('action', DEFAULT_ORIGIN_ACTION) if rules else DEFAULT_ORIGIN_ACTION
             
             new_rule_data = {
                 "expression": f"http.host eq \"{full_hostname}\"",

@@ -86,7 +86,7 @@ body {
     background: var(--bg-input);
 }
 
-/* Alerts */
+/* Alerts - backgrounds use rgba for opacity, borders/text use CSS custom properties */
 .alert {
     padding: 1rem;
     border-radius: 0.5rem;
