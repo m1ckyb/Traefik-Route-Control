@@ -673,3 +673,95 @@ body {
         opacity: 0;
     }
 }
+
+/* Diagnostics Styles */
+.diagnostics-service-info {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.diagnostics-service-info h4 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.diagnostics-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.diagnostic-check {
+    background: var(--bg-input);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    border-left: 4px solid var(--border);
+}
+
+.diagnostic-check.check-ok {
+    border-left-color: var(--success);
+}
+
+.diagnostic-check.check-warning {
+    border-left-color: var(--warning);
+}
+
+.diagnostic-check.check-fail {
+    border-left-color: var(--danger);
+}
+
+.diagnostic-check.check-info {
+    border-left-color: var(--primary);
+}
+
+.check-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.check-icon {
+    font-size: 1.25rem;
+}
+
+.check-message {
+    color: var(--text-dim);
+    font-size: 0.875rem;
+}
+
+.check-details {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.check-details div {
+    margin-bottom: 0.25rem;
+}
+
+.check-details code {
+    background: var(--bg);
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.diagnostics-actions {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: center;
+}
+
+.btn-info {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-info:hover {
+    background: var(--primary-dark);
+}

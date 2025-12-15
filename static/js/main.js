@@ -81,6 +81,118 @@ async function deleteService(serviceId, serviceName) {
     }
 }
 
+async function diagnoseService(serviceId, event) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔍 Checking...';
+    
+    try {
+        const response = await fetch(`/api/services/${serviceId}/diagnose`, {
+            method: 'GET'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showDiagnosticsModal(data);
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+        }
+        
+        btn.disabled = false;
+        btn.textContent = originalText;
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+async function repairService(serviceId) {
+    try {
+        const response = await fetch(`/api/services/${serviceId}/repair`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(data.message, 'success');
+            // Close modal and reload after a short delay
+            setTimeout(() => {
+                closeDiagnosticsModal();
+                window.location.reload();
+            }, 1500);
+        } else {
+            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+        }
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+function showDiagnosticsModal(diagnostics) {
+    const modal = document.getElementById('diagnosticsModal');
+    const content = document.getElementById('diagnosticsContent');
+    
+    let html = `<div class="diagnostics-service-info">
+        <h4>${diagnostics.service.name}</h4>
+        <p><strong>Status:</strong> ${diagnostics.service.enabled ? 'Enabled' : 'Disabled'}</p>
+    </div>`;
+    
+    html += '<div class="diagnostics-checks">';
+    
+    for (const [checkName, checkData] of Object.entries(diagnostics.checks)) {
+        const statusClass = checkData.status === 'ok' ? 'check-ok' : 
+                          checkData.status === 'warning' ? 'check-warning' : 
+                          checkData.status === 'fail' ? 'check-fail' : 'check-info';
+        
+        const statusIcon = checkData.status === 'ok' ? '✅' : 
+                         checkData.status === 'warning' ? '⚠️' : 
+                         checkData.status === 'fail' ? '❌' : 'ℹ️';
+        
+        html += `<div class="diagnostic-check ${statusClass}">
+            <div class="check-header">
+                <span class="check-icon">${statusIcon}</span>
+                <strong>${checkName.replace(/_/g, ' ').toUpperCase()}</strong>
+            </div>
+            <div class="check-message">${checkData.message}</div>`;
+        
+        // Show additional details if available
+        if (checkData.expected || checkData.actual || checkData.port || checkData.hostname || checkData.target_url) {
+            html += '<div class="check-details">';
+            if (checkData.expected) html += `<div>Expected: <code>${checkData.expected}</code></div>`;
+            if (checkData.actual) html += `<div>Actual: <code>${checkData.actual}</code></div>`;
+            if (checkData.port) html += `<div>Port: <code>${checkData.port}</code></div>`;
+            if (checkData.hostname) html += `<div>Hostname: <code>${checkData.hostname}</code></div>`;
+            if (checkData.target_url) html += `<div>Target: <code>${checkData.target_url}</code></div>`;
+            html += '</div>';
+        }
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    
+    // Add repair button if there are any warnings or failures
+    const hasIssues = Object.values(diagnostics.checks).some(c => c.status === 'warning' || c.status === 'fail');
+    if (hasIssues && diagnostics.service.enabled) {
+        html += `<div class="diagnostics-actions">
+            <button class="btn btn-primary" onclick="repairService(${diagnostics.service.id})">
+                🔧 Repair Configuration
+            </button>
+        </div>`;
+    }
+    
+    content.innerHTML = html;
+    modal.style.display = 'block';
+}
+
+function closeDiagnosticsModal() {
+    document.getElementById('diagnosticsModal').style.display = 'none';
+}
+
 // Auto-hide alerts after 5 seconds
 document.addEventListener('DOMContentLoaded', function() {
     const alerts = document.querySelectorAll('.alert');
@@ -181,9 +293,15 @@ function copyHassConfig() {
 
 // Close modal when clicking outside
 window.addEventListener('click', function(event) {
-    const modal = document.getElementById('hassModal');
-    if (event.target === modal) {
+    const hassModal = document.getElementById('hassModal');
+    const diagnosticsModal = document.getElementById('diagnosticsModal');
+    
+    if (event.target === hassModal) {
         closeHassModal();
+    }
+    
+    if (event.target === diagnosticsModal) {
+        closeDiagnosticsModal();
     }
 });
 
