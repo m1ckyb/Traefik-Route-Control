@@ -105,6 +105,12 @@ body {
     color: var(--danger);
 }
 
+.alert-warning {
+    background: rgba(234, 88, 12, 0.1);
+    border: 1px solid var(--warning);
+    color: var(--warning);
+}
+
 /* Header Row */
 .header-row {
     display: flex;
@@ -617,5 +623,16 @@ body {
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
     }
 }
