@@ -1622,6 +1622,78 @@ def api_diagnose_service(service_id):
             "port": rule_info.get("port")
         }
     
+    # Check backend host connectivity
+    target_url = service['target_url']
+    try:
+        # Parse URL to validate it
+        parsed_url = urlparse(target_url)
+        
+        # Basic SSRF protection: only allow http/https schemes
+        # Note: Checking internal IPs (e.g., 192.168.x.x) is the intended use case
+        # as this application manages access to internal backend services
+        if parsed_url.scheme not in ['http', 'https']:
+            diagnostics["checks"]["backend_host"] = {
+                "status": "info",
+                "message": f"Skipping connectivity check for non-HTTP(S) URL",
+                "target": target_url
+            }
+        else:
+            response = requests.get(target_url, timeout=5, allow_redirects=True)
+            
+            # Categorize responses more accurately
+            if 200 <= response.status_code < 300:
+                # 2xx: Success - host is responding correctly
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "ok",
+                    "message": "Backend host is responding",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            elif 300 <= response.status_code < 400:
+                # 3xx: Redirects (kept for clarity, though allow_redirects=True means this won't trigger)
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "ok",
+                    "message": "Backend host is responding (redirect)",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            elif 400 <= response.status_code < 500:
+                # 4xx: Client errors - host is reachable but may have config issues
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "warning",
+                    "message": f"Backend host returned client error (HTTP {response.status_code})",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            else:
+                # 5xx: Server errors - host is reachable but has internal errors
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "warning",
+                    "message": f"Backend host returned server error (HTTP {response.status_code})",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+    except requests.exceptions.Timeout:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Backend host connection timed out",
+            "target": target_url
+        }
+    except requests.exceptions.ConnectionError as e:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Cannot connect to backend host",
+            "target": target_url,
+            "error": str(e)
+        }
+    except Exception as e:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Error checking backend host",
+            "target": target_url,
+            "error": str(e)
+        }
+    
     return jsonify(diagnostics)
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
