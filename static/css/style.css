@@ -596,7 +596,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     width: 90%;
-    max-width: 600px;
+    max-width: 900px;
 }
 
 .modal-header {
@@ -687,9 +687,16 @@ body {
 }
 
 .diagnostics-checks {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
+}
+
+/* Stack columns on mobile */
+@media (max-width: 768px) {
+    .diagnostics-checks {
+        grid-template-columns: 1fr;
+    }
 }
 
 .diagnostic-check {

@@ -160,13 +160,16 @@ function showDiagnosticsModal(diagnostics) {
             <div class="check-message">${checkData.message}</div>`;
         
         // Show additional details if available
-        if (checkData.expected || checkData.actual || checkData.port || checkData.hostname || checkData.target_url) {
+        if (checkData.expected || checkData.actual || checkData.port || checkData.hostname || checkData.target_url || checkData.target || checkData.status_code || checkData.error) {
             html += '<div class="check-details">';
             if (checkData.expected) html += `<div>Expected: <code>${checkData.expected}</code></div>`;
             if (checkData.actual) html += `<div>Actual: <code>${checkData.actual}</code></div>`;
             if (checkData.port) html += `<div>Port: <code>${checkData.port}</code></div>`;
             if (checkData.hostname) html += `<div>Hostname: <code>${checkData.hostname}</code></div>`;
             if (checkData.target_url) html += `<div>Target: <code>${checkData.target_url}</code></div>`;
+            if (checkData.target) html += `<div>Target: <code>${checkData.target}</code></div>`;
+            if (checkData.status_code) html += `<div>Status Code: <code>${checkData.status_code}</code></div>`;
+            if (checkData.error) html += `<div>Error: <code>${checkData.error}</code></div>`;
             html += '</div>';
         }
         

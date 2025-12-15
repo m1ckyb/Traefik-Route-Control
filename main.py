@@ -1622,6 +1622,47 @@ def api_diagnose_service(service_id):
             "port": rule_info.get("port")
         }
     
+    # Check backend host connectivity
+    target_url = service['target_url']
+    try:
+        response = requests.get(target_url, timeout=5)
+        if response.status_code < 500:
+            # 2xx, 3xx, 4xx are all considered "reachable" (host is responding)
+            diagnostics["checks"]["backend_host"] = {
+                "status": "ok",
+                "message": "Backend host is responding",
+                "target": target_url,
+                "status_code": response.status_code
+            }
+        else:
+            # 5xx errors indicate host is reachable but has an error
+            diagnostics["checks"]["backend_host"] = {
+                "status": "warning",
+                "message": f"Backend host returned error (HTTP {response.status_code})",
+                "target": target_url,
+                "status_code": response.status_code
+            }
+    except requests.exceptions.Timeout:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Backend host connection timed out",
+            "target": target_url
+        }
+    except requests.exceptions.ConnectionError as e:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Cannot connect to backend host",
+            "target": target_url,
+            "error": str(e)
+        }
+    except Exception as e:
+        diagnostics["checks"]["backend_host"] = {
+            "status": "fail",
+            "message": "Error checking backend host",
+            "target": target_url,
+            "error": str(e)
+        }
+    
     return jsonify(diagnostics)
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
