@@ -1625,23 +1625,52 @@ def api_diagnose_service(service_id):
     # Check backend host connectivity
     target_url = service['target_url']
     try:
-        response = requests.get(target_url, timeout=5)
-        if response.status_code < 500:
-            # 2xx, 3xx, 4xx are all considered "reachable" (host is responding)
+        # Parse URL to validate it
+        parsed_url = urlparse(target_url)
+        
+        # Basic SSRF protection: only allow http/https schemes
+        if parsed_url.scheme not in ['http', 'https']:
             diagnostics["checks"]["backend_host"] = {
-                "status": "ok",
-                "message": "Backend host is responding",
-                "target": target_url,
-                "status_code": response.status_code
+                "status": "info",
+                "message": f"Skipping connectivity check for non-HTTP(S) URL",
+                "target": target_url
             }
         else:
-            # 5xx errors indicate host is reachable but has an error
-            diagnostics["checks"]["backend_host"] = {
-                "status": "warning",
-                "message": f"Backend host returned error (HTTP {response.status_code})",
-                "target": target_url,
-                "status_code": response.status_code
-            }
+            response = requests.get(target_url, timeout=5, allow_redirects=True)
+            
+            # Categorize responses more accurately
+            if 200 <= response.status_code < 300:
+                # 2xx: Success - host is responding correctly
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "ok",
+                    "message": "Backend host is responding",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            elif 300 <= response.status_code < 400:
+                # 3xx: Redirects (already followed, so this shouldn't happen)
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "ok",
+                    "message": "Backend host is responding (redirect)",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            elif 400 <= response.status_code < 500:
+                # 4xx: Client errors - host is reachable but may have config issues
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "warning",
+                    "message": f"Backend host returned client error (HTTP {response.status_code})",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
+            else:
+                # 5xx: Server errors - host is reachable but has internal errors
+                diagnostics["checks"]["backend_host"] = {
+                    "status": "warning",
+                    "message": f"Backend host returned server error (HTTP {response.status_code})",
+                    "target": target_url,
+                    "status_code": response.status_code
+                }
     except requests.exceptions.Timeout:
         diagnostics["checks"]["backend_host"] = {
             "status": "fail",
