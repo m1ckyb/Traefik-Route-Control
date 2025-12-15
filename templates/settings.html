@@ -117,6 +117,31 @@
                        value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
                        placeholder="External">
             </div>
+
+            <div class="form-group">
+                <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group)</label>
+                <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed IPs">
+            </div>
+
+            <div class="form-group">
+                <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group)</label>
+                <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed Ports">
+            </div>
+
+            <div class="form-group">
+                <label for="TRAEFIK_LAN_CIDR">Traefik LAN CIDR (Excluded from IP List)</label>
+                <input type="text" id="TRAEFIK_LAN_CIDR" name="TRAEFIK_LAN_CIDR" 
+                       value="{{ settings.get('TRAEFIK_LAN_CIDR', '') }}"
+                       placeholder="192.168.50.0/24">
+            </div>
+
+            <div class="form-group">
+                <button type="button" class="btn btn-secondary" onclick="syncFirewall()">🔄 Sync Firewall Groups Now</button>
+            </div>
         </div>
         
         <div class="form-actions">
@@ -146,6 +171,17 @@ function toggleFirewallSettings() {
         unifiSettings.style.display = 'grid';
     } else {
         unifiSettings.style.display = 'none';
+    }
+}
+
+function syncFirewall() {
+    if(confirm('Force sync UniFi firewall groups?')) {
+        fetch('/api/sync-firewall', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if(data.error) alert('Error: ' + data.error);
+                else alert('Sync triggered. Check logs for details.');
+            });
     }
 }
 </script>
