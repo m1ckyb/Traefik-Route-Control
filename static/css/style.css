@@ -340,7 +340,7 @@ body {
 
 /* Forms */
 .form-container {
-    max-width: 600px;
+    max-width: 1200px;
     margin: 0 auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -413,6 +413,42 @@ body {
     margin-top: 2rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--border);
+}
+
+/* Settings form - 2 column layout */
+.settings-form {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+}
+
+.settings-form h3 {
+    grid-column: 1 / -1;
+}
+
+.settings-form .form-actions {
+    grid-column: 1 / -1;
+}
+
+/* Containers for conditional settings groups */
+#hass-settings,
+#unifi-settings {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+}
+
+/* Stack columns on mobile */
+@media (max-width: 768px) {
+    .settings-form {
+        grid-template-columns: 1fr;
+    }
+    
+    #hass-settings,
+    #unifi-settings {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Loading */

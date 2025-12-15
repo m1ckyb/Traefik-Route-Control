@@ -66,7 +66,7 @@
             </select>
         </div>
         
-        <div id="hass-settings" style="{% if settings.get('HASS_ENABLED', '1') == '0' %}display: none;{% endif %}">
+        <div id="hass-settings" style="{% if settings.get('HASS_ENABLED', '1') == '0' %}display: none;{% else %}display: grid;{% endif %}">
             <div class="form-group">
                 <label for="HASS_URL">Home Assistant URL</label>
                 <input type="text" id="HASS_URL" name="HASS_URL" 
@@ -91,7 +91,7 @@
             </select>
         </div>
         
-        <div id="unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% endif %}">
+        <div id="unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% else %}display: grid;{% endif %}">
             <div class="form-group">
                 <label for="UNIFI_HOST">UniFi Host</label>
                 <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
@@ -132,7 +132,7 @@ function toggleHomeAssistantSettings() {
     const hassSettings = document.getElementById('hass-settings');
     
     if (enabled) {
-        hassSettings.style.display = 'block';
+        hassSettings.style.display = 'grid';
     } else {
         hassSettings.style.display = 'none';
     }
@@ -143,7 +143,7 @@ function toggleFirewallSettings() {
     const unifiSettings = document.getElementById('unifi-settings');
     
     if (type === 'unifi') {
-        unifiSettings.style.display = 'block';
+        unifiSettings.style.display = 'grid';
     } else {
         unifiSettings.style.display = 'none';
     }
