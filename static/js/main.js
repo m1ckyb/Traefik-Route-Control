@@ -2,9 +2,12 @@
 async function toggleService(serviceId, enable, event) {
     const action = enable ? 'on' : 'off';
     
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = enable ? '⏳ Enabling...' : '⏳ Disabling...';
+    const switchInput = event.target;
+    switchInput.disabled = true;
+    
+    // Find the parent service card to show a loading state
+    const serviceCard = switchInput.closest('.service-card');
+    serviceCard.classList.add('loading-state');
     
     try {
         const response = await fetch(`/api/services/${serviceId}/${action}`, {
@@ -14,19 +17,21 @@ async function toggleService(serviceId, enable, event) {
         const data = await response.json();
         
         if (response.ok) {
-            // Show success toast notification
             showNotification(data.message, 'success');
-            // Reload after a short delay to show the toast
             setTimeout(() => window.location.reload(), 1000);
         } else {
             showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
-            btn.disabled = false;
-            btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
+            // Revert the switch state on failure
+            switchInput.checked = !enable;
+            switchInput.disabled = false;
+            serviceCard.classList.remove('loading-state');
         }
     } catch (error) {
         showNotification('Error: ' + error.message, 'error');
-        btn.disabled = false;
-        btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
+        // Revert the switch state on failure
+        switchInput.checked = !enable;
+        switchInput.disabled = false;
+        serviceCard.classList.remove('loading-state');
     }
 }
 

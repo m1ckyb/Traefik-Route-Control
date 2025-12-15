@@ -3,7 +3,11 @@
 {% block content %}
 <div class="header-row">
     <h2>Services</h2>
-    <a href="/services/new" class="btn btn-primary">+ Add Service</a>
+    <div class="header-actions">
+        <button onclick="showLogs()" class="btn btn-info">Logs</button>
+        <button id="global-toggle-btn" class="btn btn-secondary" style="display: none;">Global Power</button>
+        <a href="/services/new" class="btn btn-primary">+ Add Service</a>
+    </div>
 </div>
 
 {% if services %}
@@ -11,13 +15,23 @@
     {% for service in services %}
     <div class="service-card" data-service-id="{{ service.id }}">
         <div class="service-header">
-            <h3>{{ service.name }}</h3>
+            <div class="service-title-switch">
+                <label class="switch">
+                    <input type="checkbox" {% if service.enabled %}checked{% endif %} onchange="toggleService({{ service.id }}, this.checked, event)">
+                    <span class="slider round"></span>
+                </label>
+                <h3>{{ service.name }}</h3>
+            </div>
             <div class="service-header-right">
                 <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
                     {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
                 </span>
+                <a href="/services/{{ service.id }}/edit" class="btn-icon" title="Edit Service">✏️</a>
                 <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
                     ⚙️
+                </button>
+                <button class="btn-icon btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)" title="Delete Service">
+                    🗑️
                 </button>
             </div>
         </div>
@@ -51,24 +65,13 @@
         
         <div class="service-actions">
             {% if service.enabled %}
-            <button class="btn btn-warning" onclick="toggleService({{ service.id }}, false, event)">
-                🛑 Turn Off
-            </button>
             <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
                 🔄 Rotate URL
             </button>
             <button class="btn btn-info" onclick="diagnoseService({{ service.id }}, event)">
                 🔍 Diagnose
             </button>
-            {% else %}
-            <button class="btn btn-success" onclick="toggleService({{ service.id }}, true, event)">
-                🚀 Turn On
-            </button>
             {% endif %}
-            <a href="/services/{{ service.id }}/edit" class="btn btn-secondary">✏️ Edit</a>
-            <button class="btn btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)">
-                🗑️ Delete
-            </button>
         </div>
     </div>
     {% endfor %}
@@ -109,5 +112,85 @@
         </div>
     </div>
 </div>
+
+<!-- Logs Modal -->
+<div id="logsModal" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h3>System Logs</h3>
+            <span class="modal-close" onclick="closeLogsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="log-viewer" id="logContent">Loading logs...</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="fetchLogs()">Refresh</button>
+                <button class="btn btn-primary" onclick="closeLogsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.service-title-switch input[type="checkbox"]');
+    const btn = document.getElementById('global-toggle-btn');
+    
+    if (checkboxes.length > 0) {
+        btn.style.display = 'inline-block';
+        // Check if all services are currently enabled
+        const allOn = Array.from(checkboxes).every(cb => cb.checked);
+        
+        if (allOn) {
+            btn.textContent = 'Turn All Off';
+            btn.className = 'btn btn-danger';
+            btn.onclick = turnAllOff;
+        } else {
+            btn.textContent = 'Turn All On';
+            btn.className = 'btn btn-success';
+            btn.onclick = turnAllOn;
+        }
+    }
+});
+
+function turnAllOn() {
+    if (confirm('Are you sure you want to turn ON all services?')) {
+        fetch('/api/services/all/on', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => window.location.reload());
+    }
+}
+
+function turnAllOff() {
+    if (confirm('Are you sure you want to turn OFF all services?')) {
+        fetch('/api/services/all/off', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => window.location.reload());
+    }
+}
+
+function showLogs() {
+    document.getElementById('logsModal').style.display = 'block';
+    fetchLogs();
+}
+
+function closeLogsModal() {
+    document.getElementById('logsModal').style.display = 'none';
+}
+
+function fetchLogs() {
+    const logContent = document.getElementById('logContent');
+    
+    fetch('/api/logs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.logs) {
+                logContent.textContent = data.logs;
+                logContent.scrollTop = logContent.scrollHeight;
+            } else if (data.error) {
+                logContent.textContent = 'Error: ' + data.error;
+            }
+        });
+}
+</script>
 
 {% endblock %}

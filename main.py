@@ -37,6 +37,34 @@ import database as db
 # Import DATA_DIR for secret key storage
 from database import DATA_DIR
 
+# --- LOGGING SETUP ---
+class Tee(object):
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            try:
+                f.write(obj)
+                f.flush()
+            except: pass
+    def flush(self):
+        for f in self.files:
+            try: f.flush()
+            except: pass
+
+LOG_FILE = os.path.join(DATA_DIR, 'app.log')
+# Truncate log file on startup and redirect stdout/stderr
+try:
+    with open(LOG_FILE, 'w', encoding='utf-8') as f:
+        f.write(f"--- Log Started at {time.ctime()} ---\n")
+    
+    log_file_handle = open(LOG_FILE, 'a', encoding='utf-8')
+    sys.stdout = Tee(sys.stdout, log_file_handle)
+    sys.stderr = Tee(sys.stderr, log_file_handle)
+except Exception as e:
+    print(f"⚠️ Failed to setup logging: {e}")
+# ---------------------
+
 # Suppress InsecureRequestWarning for UniFi self-signed certs
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -109,8 +137,6 @@ def migrate_env_to_db():
 env_path = os.path.join(script_dir, ".env")
 if os.path.exists(env_path):
     load_dotenv(env_path)
-    # Migrate settings from .env to database
-    migrate_env_to_db()
 
 def get_setting(key, required=True):
     """Get a setting from database.
@@ -620,27 +646,40 @@ def turn_off_service(service_id):
             print("   No DNS records found to clean.")
 
     print("🔹 Cleaning up Origin Rule...")
-    origin_rule_base_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
-    service_origin_rule_name = f"{origin_rule_base_name} - {service['name']}"
+    origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+    
+    # Get all currently enabled services to build the list of hostnames
+    all_services = db.get_all_services()
+    # Exclude the service being turned off
+    active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname'] and s['id'] != service_id]
     
     ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
     if ruleset_data:
         rules = ruleset_data.get('result', {}).get('rules', [])
-        target_rule = next((r for r in rules if r.get('description') == service_origin_rule_name), None)
-        
+        target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
+        ruleset_id = ruleset_data.get('result', {}).get('id')
+
         if target_rule:
-            # Remove this service's rule from the ruleset
-            remaining_rules = [r for r in rules if r.get('description') != service_origin_rule_name]
-            ruleset_id = ruleset_data.get('result', {}).get('id')
-            
-            rules_data = {"rules": remaining_rules}
-            result = cf_request("PUT", f"rulesets/{ruleset_id}", rules_data)
-            if result:
-                print(f"   Deleted Origin Rule: {service_origin_rule_name}")
+            if active_hostnames:
+                # Update the rule with the remaining hostnames
+                host_list = " ".join(f'"{h}"' for h in active_hostnames)
+                new_expression = f"http.host in {{{host_list}}}"
+                
+                update_data = {
+                    "expression": new_expression,
+                    "description": origin_rule_name,
+                    "action": target_rule['action'],
+                    "action_parameters": target_rule['action_parameters'],
+                    "enabled": True
+                }
+                cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
+                print(f"   Updated Origin Rule with remaining hosts: {origin_rule_name}")
             else:
-                print(f"   ⚠️ Warning: Failed to delete Origin Rule")
+                # No active services left, delete the rule
+                cf_request("DELETE", f"rulesets/{ruleset_id}/rules/{target_rule['id']}")
+                print(f"   Deleted Origin Rule as no services are active: {origin_rule_name}")
         else:
-            print(f"   No Origin Rule found for {service['name']}")
+            print(f"   No Origin Rule found to clean up.")
 
     print("🔹 Updating Home Assistant...")
     update_hass("Disabled", service['name'], service.get('hass_entity_id'))
@@ -714,44 +753,49 @@ def turn_on_service(service_id):
         return {"error": "Failed to create DNS record"}
 
     print("🔹 Updating Origin Rule...")
-    # Create a per-service origin rule name to avoid conflicts
-    origin_rule_base_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
-    service_origin_rule_name = f"{origin_rule_base_name} - {service['name']}"
+    origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+    
+    # Get all currently enabled services to build the list of hostnames
+    all_services = db.get_all_services()
+    active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname']]
+    
+    # Add the new hostname to the list
+    if full_hostname not in active_hostnames:
+        active_hostnames.append(full_hostname)
+    
+    # Format for Cloudflare API
+    host_list = " ".join(f'"{h}"' for h in active_hostnames)
+    new_expression = f"http.host in {{{host_list}}}"
     
     ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
     
     if ruleset_data:
         rules = ruleset_data.get('result', {}).get('rules', [])
-        target_rule = next((r for r in rules if r.get('description') == service_origin_rule_name), None)
+        target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
         ruleset_id = ruleset_data.get('result', {}).get('id')
 
         if target_rule:
-            # Update existing rule for this service
-            action_params = target_rule.get('action_parameters', {})
-            
-            # Set the destination port for origin
-            if 'origin' not in action_params:
-                action_params['origin'] = {}
-            action_params['origin']['port'] = random_port
-            
+            # Update existing rule
             update_data = {
-                "expression": f"http.host eq \"{full_hostname}\"",
-                "description": service_origin_rule_name,
+                "expression": new_expression,
+                "description": origin_rule_name,
                 "action": target_rule['action'],
-                "action_parameters": action_params,
+                "action_parameters": target_rule['action_parameters'],
                 "enabled": True
             }
+            # Also update the port in the action parameters
+            if 'origin' not in update_data['action_parameters']:
+                update_data['action_parameters']['origin'] = {}
+            update_data['action_parameters']['origin']['port'] = random_port
+
             cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
-            print(f"   Updated existing Origin Rule: {service_origin_rule_name}")
+            print(f"   Updated existing Origin Rule: {origin_rule_name}")
         else:
-            # Create a new rule for this service
-            # Try to get action from any existing rule as a template, or use default
-            existing_action = rules[0].get('action', DEFAULT_ORIGIN_ACTION) if rules else DEFAULT_ORIGIN_ACTION
-            
+            # Create a new rule
             new_rule_data = {
-                "expression": f"http.host eq \"{full_hostname}\"",
-                "description": service_origin_rule_name,
-                "action": existing_action,
+                "expression": new_expression,
+                "description": origin_rule_name,
+                "action": "route",
                 "action_parameters": {
                     "origin": {
                         "port": random_port
@@ -760,15 +804,13 @@ def turn_on_service(service_id):
                 "enabled": True
             }
             
-            # Get existing rules to properly position the new rule
             rules_data = {
                 "rules": rules + [new_rule_data]
             }
             
-            # Update the ruleset with the new rule appended
             result = cf_request("PUT", f"rulesets/{ruleset_id}", rules_data)
             if result:
-                print(f"   Created new Origin Rule: {service_origin_rule_name}")
+                print(f"   Created new Origin Rule: {origin_rule_name}")
             else:
                 print(f"   ⚠️ Warning: Failed to create Origin Rule")
 
@@ -1543,8 +1585,7 @@ def api_diagnose_service(service_id):
     if service.get('current_hostname'):
         domain_root = get_setting("DOMAIN_ROOT", required=False)
         if domain_root:
-            subdomain = service['current_hostname'].replace(f".{domain_root}", "")
-            records = cf_request("GET", f"dns_records?type=A&name={subdomain}")
+            records = cf_request("GET", f"dns_records?type=A&name={service['current_hostname']}")
             
             if records and records.get('result'):
                 dns_record = records['result'][0]
@@ -1559,7 +1600,7 @@ def api_diagnose_service(service_id):
                 diagnostics["checks"]["dns"] = {
                     "status": "fail",
                     "message": "DNS record not found in Cloudflare",
-                    "expected_name": subdomain
+                    "expected_name": service['current_hostname']
                 }
         else:
             diagnostics["checks"]["dns"] = {
@@ -1574,27 +1615,37 @@ def api_diagnose_service(service_id):
     
     # Check Cloudflare Origin Rule
     if service.get('current_hostname'):
-        origin_rule_base_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
-        service_origin_rule_name = f"{origin_rule_base_name} - {service['name']}"
+        origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
         
         ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
         if ruleset_data:
             rules = ruleset_data.get('result', {}).get('rules', [])
-            target_rule = next((r for r in rules if r.get('description') == service_origin_rule_name), None)
+            target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
             
             if target_rule:
-                port = target_rule.get('action_parameters', {}).get('origin', {}).get('port')
-                diagnostics["checks"]["origin_rule"] = {
-                    "status": "ok",
-                    "message": "Origin rule exists",
-                    "port": port,
-                    "enabled": target_rule.get('enabled')
-                }
+                # Check if hostname is in expression
+                expression = target_rule.get('expression', '')
+                hostname = service['current_hostname']
+                
+                if f'"{hostname}"' in expression:
+                    port = target_rule.get('action_parameters', {}).get('origin', {}).get('port')
+                    diagnostics["checks"]["origin_rule"] = {
+                        "status": "ok",
+                        "message": "Origin rule exists and includes hostname",
+                        "port": port,
+                        "enabled": target_rule.get('enabled')
+                    }
+                else:
+                    diagnostics["checks"]["origin_rule"] = {
+                        "status": "warning",
+                        "message": "Origin rule exists but hostname missing from expression",
+                        "expression": expression
+                    }
             else:
                 diagnostics["checks"]["origin_rule"] = {
                     "status": "warning",
                     "message": "Origin rule not found",
-                    "expected_description": service_origin_rule_name
+                    "expected_description": origin_rule_name
                 }
         else:
             diagnostics["checks"]["origin_rule"] = {
@@ -1710,6 +1761,40 @@ def api_delete_service(service_id):
     db.delete_service(service_id)
     return jsonify({"message": "Service deleted successfully"})
 
+@app.route('/api/logs', methods=['GET'])
+@api_key_or_login_required
+def api_get_logs():
+    try:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({"logs": content})
+        return jsonify({"logs": "Log file empty or not found."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/services/all/on', methods=['POST'])
+@api_key_or_login_required
+def api_turn_on_all():
+    services = db.get_all_services()
+    results = []
+    for service in services:
+        if not service['enabled']:
+            result = turn_on_service(service['id'])
+            results.append(result)
+    return jsonify({"results": results})
+
+@app.route('/api/services/all/off', methods=['POST'])
+@api_key_or_login_required
+def api_turn_off_all():
+    services = db.get_all_services()
+    results = []
+    for service in services:
+        if service['enabled']:
+            result = turn_off_service(service['id'])
+            results.append(result)
+    return jsonify({"results": results})
+
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
 @api_key_or_login_required
@@ -1789,6 +1874,9 @@ if __name__ == "__main__":
                         help="Action to perform", default="serve", nargs="?")
     args = parser.parse_args()
 
+    # Ensure environment is migrated/setup before any action
+    migrate_env_to_db()
+
     if args.action == "status":
         s = get_status()
         print(f"\n📊 SYSTEM STATUS")
@@ -1807,4 +1895,3 @@ if __name__ == "__main__":
         print(f"🚀 Starting Web UI on http://{API_HOST}:{API_PORT}")
         print(f"   Configure settings and services at http://{API_HOST}:{API_PORT}/settings")
         app.run(host=API_HOST, port=API_PORT, debug=False)
-
