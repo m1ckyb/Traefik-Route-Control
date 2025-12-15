@@ -368,6 +368,15 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
     
     # Strip whitespace - if result is empty/None, skip HA update
     hass_entity_id = hass_entity_id.strip() if hass_entity_id else None
+
+    # Explicitly check for "None" or "null" strings
+    if hass_entity_id and hass_entity_id.lower() in ["none", "null"]:
+        hass_entity_id = None
+
+    # Validate entity ID format before sending request
+    if hass_entity_id and '.' not in hass_entity_id:
+        print(f"❌ Invalid Home Assistant entity ID format: '{hass_entity_id}'. Skipping update.")
+        return
     
     if not hass_url or not hass_entity_id or not hass_token:
         return  # HA integration disabled or not configured
