@@ -297,6 +297,9 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
     if not hass_entity_id:
         hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
     
+    # Strip whitespace - if result is empty/None, skip HA update
+    hass_entity_id = hass_entity_id.strip() if hass_entity_id else None
+    
     if not hass_url or not hass_entity_id or not hass_token:
         return  # HA integration disabled or not configured
     
@@ -353,9 +356,18 @@ def check_unifi_rule():
         
         target_rule = next((r for r in rules if r.get("name") == unifi_rule_name), None)
         if target_rule:
+            # Convert port to int for consistent comparison, with error handling
+            dst_port = target_rule.get("dst_port")
+            port = None
+            if dst_port:
+                try:
+                    port = int(dst_port)
+                except (ValueError, TypeError):
+                    # If conversion fails, log and leave as None
+                    print(f"⚠️ Warning: Invalid port value '{dst_port}' in UniFi rule")
             return {
                 "enabled": target_rule["enabled"],
-                "port": target_rule.get("dst_port")
+                "port": port
             }
         return None # Rule not found
         
