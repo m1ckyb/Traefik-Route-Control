@@ -1629,6 +1629,8 @@ def api_diagnose_service(service_id):
         parsed_url = urlparse(target_url)
         
         # Basic SSRF protection: only allow http/https schemes
+        # Note: Checking internal IPs (e.g., 192.168.x.x) is the intended use case
+        # as this application manages access to internal backend services
         if parsed_url.scheme not in ['http', 'https']:
             diagnostics["checks"]["backend_host"] = {
                 "status": "info",
@@ -1648,7 +1650,7 @@ def api_diagnose_service(service_id):
                     "status_code": response.status_code
                 }
             elif 300 <= response.status_code < 400:
-                # 3xx: Redirects (already followed, so this shouldn't happen)
+                # 3xx: Redirects (kept for clarity, though allow_redirects=True means this won't trigger)
                 diagnostics["checks"]["backend_host"] = {
                     "status": "ok",
                     "message": "Backend host is responding (redirect)",
