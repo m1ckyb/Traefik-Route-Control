@@ -167,7 +167,7 @@ function showDiagnosticsModal(diagnostics) {
             if (checkData.port) html += `<div>Port: <code>${checkData.port}</code></div>`;
             if (checkData.hostname) html += `<div>Hostname: <code>${checkData.hostname}</code></div>`;
             if (checkData.target_url) html += `<div>Target: <code>${checkData.target_url}</code></div>`;
-            if (checkData.target) html += `<div>Target: <code>${checkData.target}</code></div>`;
+            if (checkData.target) html += `<div>Backend URL: <code>${checkData.target}</code></div>`;
             if (checkData.status_code) html += `<div>Status Code: <code>${checkData.status_code}</code></div>`;
             if (checkData.error) html += `<div>Error: <code>${checkData.error}</code></div>`;
             html += '</div>';
