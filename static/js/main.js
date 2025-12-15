@@ -19,16 +19,17 @@ async function toggleService(serviceId, enable, event) {
         const data = await response.json();
         
         if (response.ok) {
-            // Show success message and reload
-            alert(data.message);
-            window.location.reload();
+            // Show success toast notification
+            showNotification(data.message, 'success');
+            // Reload after a short delay to show the toast
+            setTimeout(() => window.location.reload(), 1000);
         } else {
-            alert('Error: ' + (data.error || 'Unknown error occurred'));
+            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             btn.disabled = false;
             btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        showNotification('Error: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
     }
@@ -49,15 +50,16 @@ async function rotateService(serviceId, event) {
         const data = await response.json();
         
         if (response.ok) {
-            alert(data.message);
-            window.location.reload();
+            showNotification(data.message, 'success');
+            // Reload after a short delay to show the toast
+            setTimeout(() => window.location.reload(), 1000);
         } else {
-            alert('Error: ' + (data.error || 'Unknown error occurred'));
+            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             btn.disabled = false;
             btn.textContent = '🔄 Rotate URL';
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        showNotification('Error: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = '🔄 Rotate URL';
     }
@@ -75,13 +77,14 @@ async function deleteService(serviceId, serviceName) {
         const data = await response.json();
         
         if (response.ok) {
-            alert(data.message);
-            window.location.reload();
+            showNotification(data.message, 'success');
+            // Reload after a short delay to show the toast
+            setTimeout(() => window.location.reload(), 1000);
         } else {
-            alert('Error: ' + (data.error || 'Unknown error occurred'));
+            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        showNotification('Error: ' + error.message, 'error');
     }
 }
 
@@ -142,7 +145,7 @@ function showNotification(message, type = 'success') {
     document.body.appendChild(notification);
     
     setTimeout(() => {
-        notification.style.opacity = '0';
+        notification.style.animation = 'slideOut 0.3s ease-out';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
