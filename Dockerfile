@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application files
 COPY main.py .
 COPY database.py .
+COPY VERSION.txt .
 COPY templates templates/
 COPY static static/
 

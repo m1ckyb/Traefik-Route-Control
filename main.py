@@ -79,6 +79,24 @@ db.init_db()
 # No longer required at startup
 REQUIRED_SETTINGS = []
 
+def get_version():
+    """Read version from VERSION.txt"""
+    try:
+        version_file = os.path.join(script_dir, 'VERSION.txt')
+        if os.path.exists(version_file):
+            with open(version_file, 'r') as f:
+                return f.read().strip()
+        
+        # Try current working directory as fallback
+        cwd_file = os.path.join(os.getcwd(), 'VERSION.txt')
+        if os.path.exists(cwd_file):
+            with open(cwd_file, 'r') as f:
+                return f.read().strip()
+    except Exception as e:
+        print(f"⚠️ Error reading version: {e}")
+        
+    return "Unknown"
+
 def migrate_env_to_db():
     """Migrate settings from .env file to database (one-time)."""
     env_keys = [
@@ -1076,6 +1094,10 @@ def logout():
     logout_user()
     flash('Logged out successfully', 'success')
     return redirect(url_for('login'))
+
+@app.context_processor
+def inject_version():
+    return dict(version=get_version())
 
 # WebAuthn routes
 @app.route('/auth/register/begin', methods=['POST'])

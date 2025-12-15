@@ -24,12 +24,23 @@ body {
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
+}
+
+/* Make the main container take up available space */
+body > .container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
 }
 
 /* Navbar */
@@ -118,6 +129,7 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    width: 100%;
 }
 
 .header-row h2 {
@@ -195,6 +207,7 @@ body {
     grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
+    width: 100%;
 }
 
 .service-card {
@@ -363,6 +376,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 2rem;
+    width: 100%;
 }
 
 .form-container h2 {
@@ -437,6 +451,7 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
+    width: 100%;
 }
 
 .settings-form h3 {
@@ -889,4 +904,13 @@ input:checked + .slider:before {
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
+}
+
+.footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    text-align: right;
+    color: var(--text-dim);
+    font-size: 0.875rem;
 }
