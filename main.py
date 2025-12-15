@@ -573,9 +573,16 @@ def turn_off_service(service_id):
     if records:
         count = 0
         for record in records.get('result', []):
-            print(f"   Deleting: {record['name']}")
-            cf_request("DELETE", f"dns_records/{record['id']}")
-            count += 1
+            record_name = record['name']
+            # Only delete records that actually start with this service's prefix pattern
+            expected_prefix = f"{subdomain_prefix}-"
+            # Extract just the subdomain part (without domain)
+            subdomain = record_name.split('.')[0] if '.' in record_name else record_name
+            
+            if subdomain.startswith(expected_prefix):
+                print(f"   Deleting: {record_name}")
+                cf_request("DELETE", f"dns_records/{record['id']}")
+                count += 1
         
         if count == 0:
             print("   No DNS records found to clean.")
@@ -726,8 +733,19 @@ def turn_on_service(service_id):
     print("🔹 Cleaning old DNS for this service...")
     records = cf_request("GET", f"dns_records?type=A&name_contains={service['subdomain_prefix']}-")
     if records:
+        domain_root = get_setting("DOMAIN_ROOT")
         for record in records.get('result', []):
-            if record['name'] != full_hostname:
+            record_name = record['name']
+            # Only delete records that:
+            # 1. Are not the current hostname
+            # 2. Actually start with this service's prefix pattern
+            # 3. Match the expected format: prefix-random.domain
+            expected_prefix = f"{service['subdomain_prefix']}-"
+            # Extract just the subdomain part (without domain)
+            subdomain = record_name.split('.')[0] if '.' in record_name else record_name
+            
+            if record_name != full_hostname and subdomain.startswith(expected_prefix):
+                print(f"   Deleting old DNS record: {record_name}")
                 cf_request("DELETE", f"dns_records/{record['id']}")
 
     print("🔹 Updating Traefik...")
