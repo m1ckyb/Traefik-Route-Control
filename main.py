@@ -284,6 +284,29 @@ def cf_request(method, endpoint, data=None):
         return None
     return response.json()
 
+def should_delete_dns_record(record_name, subdomain_prefix, current_hostname=None):
+    """
+    Check if a DNS record should be deleted based on subdomain prefix matching.
+    
+    Args:
+        record_name: Full DNS record name (e.g., "jf-abc123.example.com")
+        subdomain_prefix: Service subdomain prefix (e.g., "jf")
+        current_hostname: Optional current hostname to preserve (won't be deleted)
+    
+    Returns:
+        bool: True if the record should be deleted, False otherwise
+    """
+    # Don't delete the current hostname
+    if current_hostname and record_name == current_hostname:
+        return False
+    
+    # Only delete records that actually start with this service's prefix pattern
+    expected_prefix = f"{subdomain_prefix}-"
+    # Extract just the subdomain part (without domain)
+    subdomain = record_name.split('.')[0] if '.' in record_name else record_name
+    
+    return subdomain.startswith(expected_prefix)
+
 def update_hass(state, service_name="Service", hass_entity_id=None):
     # Check if Home Assistant integration is enabled
     hass_enabled = get_setting("HASS_ENABLED", required=False)
@@ -573,14 +596,8 @@ def turn_off_service(service_id):
     if records:
         count = 0
         for record in records.get('result', []):
-            record_name = record['name']
-            # Only delete records that actually start with this service's prefix pattern
-            expected_prefix = f"{subdomain_prefix}-"
-            # Extract just the subdomain part (without domain)
-            subdomain = record_name.split('.')[0] if '.' in record_name else record_name
-            
-            if subdomain.startswith(expected_prefix):
-                print(f"   Deleting: {record_name}")
+            if should_delete_dns_record(record['name'], subdomain_prefix):
+                print(f"   Deleting: {record['name']}")
                 cf_request("DELETE", f"dns_records/{record['id']}")
                 count += 1
         
@@ -630,23 +647,34 @@ def turn_on_service(service_id):
     # Check if any other service is already enabled and get its port
     # All active services share the same firewall port
     all_services = db.get_all_services()
-    active_service_port = None
-    for other_service in all_services:
-        if other_service['id'] != service_id and other_service['enabled'] and other_service.get('current_port'):
-            active_service_port = other_service['current_port']
-            print(f"   Reusing existing port from {other_service['name']}: {active_service_port}")
-            break
+    active_service_ports = set()
+    active_service_with_port = None
     
-    # If no other service is active, generate a new random port
-    if active_service_port is None:
+    for other_service in all_services:
+        if other_service['id'] != service_id and other_service['enabled']:
+            port = other_service.get('current_port')
+            if port:
+                active_service_ports.add(port)
+                if active_service_with_port is None:
+                    active_service_with_port = other_service
+    
+    # Validate that all active services are using the same port
+    if len(active_service_ports) > 1:
+        print(f"⚠️ Warning: Multiple different ports detected across active services: {active_service_ports}")
+        print(f"   This may indicate a configuration issue. Using port from {active_service_with_port['name']}")
+    
+    # Use existing port if available, otherwise generate new one
+    if active_service_with_port:
+        active_service_port = active_service_with_port['current_port']
+        print(f"   Reusing existing port from {active_service_with_port['name']}: {active_service_port}")
+        # Firewall is already open with the existing port
+        print(f"   Firewall already open on port {active_service_port}")
+    else:
         active_service_port = generate_random_port()
         print(f"   Generated new random port: {active_service_port}")
         # Update UniFi with the new port only if we're generating a new one
         if not toggle_unifi(True, active_service_port):
             print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
-    else:
-        # Firewall is already open with the existing port, just ensure it's enabled
-        print(f"   Firewall already open on port {active_service_port}")
     
     random_port = active_service_port  # Use the shared port
 
@@ -733,19 +761,9 @@ def turn_on_service(service_id):
     print("🔹 Cleaning old DNS for this service...")
     records = cf_request("GET", f"dns_records?type=A&name_contains={service['subdomain_prefix']}-")
     if records:
-        domain_root = get_setting("DOMAIN_ROOT")
         for record in records.get('result', []):
-            record_name = record['name']
-            # Only delete records that:
-            # 1. Are not the current hostname
-            # 2. Actually start with this service's prefix pattern
-            # 3. Match the expected format: prefix-random.domain
-            expected_prefix = f"{service['subdomain_prefix']}-"
-            # Extract just the subdomain part (without domain)
-            subdomain = record_name.split('.')[0] if '.' in record_name else record_name
-            
-            if record_name != full_hostname and subdomain.startswith(expected_prefix):
-                print(f"   Deleting old DNS record: {record_name}")
+            if should_delete_dns_record(record['name'], service['subdomain_prefix'], full_hostname):
+                print(f"   Deleting old DNS record: {record['name']}")
                 cf_request("DELETE", f"dns_records/{record['id']}")
 
     print("🔹 Updating Traefik...")
