@@ -620,13 +620,28 @@ def turn_on_service(service_id):
     
     print(f"\n🚀 === ENABLING {service['name']} ===")
     
-    # Generate random port
-    random_port = generate_random_port()
-    print(f"   Generated random port: {random_port}")
+    # Check if any other service is already enabled and get its port
+    # All active services share the same firewall port
+    all_services = db.get_all_services()
+    active_service_port = None
+    for other_service in all_services:
+        if other_service['id'] != service_id and other_service['enabled'] and other_service.get('current_port'):
+            active_service_port = other_service['current_port']
+            print(f"   Reusing existing port from {other_service['name']}: {active_service_port}")
+            break
     
-    # Update UniFi with the new port
-    if not toggle_unifi(True, random_port):
-        print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
+    # If no other service is active, generate a new random port
+    if active_service_port is None:
+        active_service_port = generate_random_port()
+        print(f"   Generated new random port: {active_service_port}")
+        # Update UniFi with the new port only if we're generating a new one
+        if not toggle_unifi(True, active_service_port):
+            print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
+    else:
+        # Firewall is already open with the existing port, just ensure it's enabled
+        print(f"   Firewall already open on port {active_service_port}")
+    
+    random_port = active_service_port  # Use the shared port
 
     domain_root = get_setting("DOMAIN_ROOT")
     if not domain_root:
