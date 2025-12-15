@@ -137,54 +137,7 @@ async function repairService(serviceId) {
     }
 }
 
-async function testFirewall(serviceId) {
-    const btn = document.getElementById('firewall-test-btn');
-    const resultsContainer = document.getElementById('firewall-test-results');
-    
-    btn.disabled = true;
-    btn.textContent = '🛡️ Testing...';
-    resultsContainer.innerHTML = '<div class="diagnostic-check check-info"><div class="check-message">Running firewall tests...</div></div>';
-    
-    try {
-        const response = await fetch(`/api/services/${serviceId}/test-firewall`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        let html = '';
 
-        if (response.ok) {
-            if (data.info) {
-                 html = `<div class="diagnostic-check check-info"><div class="check-header"><span class="check-icon">ℹ️</span><strong>FIREWALL TEST</strong></div><div class="check-message">${data.info}</div></div>`;
-            } else {
-                // Process ip_check and port_check
-                for (const [checkName, checkData] of Object.entries(data)) {
-                    const statusClass = checkData.status === 'ok' ? 'check-ok' : 
-                                      checkData.status === 'warning' ? 'check-warning' : 'check-fail';
-                    const statusIcon = checkData.status === 'ok' ? '✅' : 
-                                     checkData.status === 'warning' ? '⚠️' : '❌';
-
-                    html += `<div class="diagnostic-check ${statusClass}">
-                        <div class="check-header">
-                            <span class="check-icon">${statusIcon}</span>
-                            <strong>${checkName.replace(/_/g, ' ').toUpperCase()}</strong>
-                        </div>
-                        <div class="check-message">${checkData.message}</div>
-                    </div>`;
-                }
-            }
-        } else {
-            html = `<div class="diagnostic-check check-fail"><div class="check-header"><span class="check-icon">❌</span><strong>FIREWALL TEST</strong></div><div class="check-message">Error: ${data.error || 'Unknown error'}</div></div>`;
-        }
-        resultsContainer.innerHTML = html;
-
-    } catch (error) {
-        resultsContainer.innerHTML = `<div class="diagnostic-check check-fail"><div class="check-header"><span class="check-icon">❌</span><strong>FIREWALL TEST</strong></div><div class="check-message">Error: ${error.message}</div></div>`;
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '🛡️ Test Firewall';
-    }
-}
 
 function showDiagnosticsModal(diagnostics) {
     const modal = document.getElementById('diagnosticsModal');
@@ -232,24 +185,15 @@ function showDiagnosticsModal(diagnostics) {
     
     html += '</div>';
     
-    // Add action buttons
-    html += `<div class="diagnostics-actions">`;
+    // Add repair button if there are any warnings or failures
     const hasIssues = Object.values(diagnostics.checks).some(c => c.status === 'warning' || c.status === 'fail');
     if (hasIssues && diagnostics.service.enabled) {
-        html += `<button class="btn btn-primary" onclick="repairService(${diagnostics.service.id})">
+        html += `<div class="diagnostics-actions">
+            <button class="btn btn-primary" onclick="repairService(${diagnostics.service.id})">
                 🔧 Repair Configuration
-            </button>`;
+            </button>
+        </div>`;
     }
-    // Add firewall test button if firewall diagnostics are not in 'info' state
-    if (diagnostics.checks.firewall && diagnostics.checks.firewall.status !== 'info' && diagnostics.service.enabled) {
-        html += `<button class="btn btn-secondary" id="firewall-test-btn" onclick="testFirewall(${diagnostics.service.id})">
-                🛡️ Test Firewall
-            </button>`;
-    }
-    html += `</div>`;
-    
-    // Add a container for firewall test results
-    html += `<div id="firewall-test-results" class="diagnostics-checks" style="margin-top: 15px;"></div>`;
     
     content.innerHTML = html;
     modal.style.display = 'block';

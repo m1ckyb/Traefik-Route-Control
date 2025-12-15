@@ -606,7 +606,7 @@ def sync_unifi_groups(session=None, base_url=None):
 
 # ================= UNIFI LOGIC =================
 
-def test_service_firewall(service_id):
+def _test_service_firewall(service_id):
     """Checks if a specific service's IP/port are correctly represented in UniFi firewall groups."""
     service = db.get_service(service_id)
     if not service:
@@ -2040,6 +2040,26 @@ def api_diagnose_service(service_id):
             "target_url": actual_target_url
         }
     
+    # Check firewall status
+    rule_info = check_unifi_rule()
+    if rule_info is None:
+        diagnostics["checks"]["firewall"] = {
+            "status": "info",
+            "message": "Firewall control not configured"
+        }
+    elif rule_info.get("enabled"):
+        diagnostics["checks"]["firewall"] = {
+            "status": "ok",
+            "message": "Firewall rule is enabled",
+            "port": rule_info.get("port")
+        }
+    else:
+        diagnostics["checks"]["firewall"] = {
+            "status": "warning",
+            "message": "Firewall rule is disabled",
+            "port": rule_info.get("port")
+        }
+    
     # Check DNS record
     if service.get('current_hostname'):
         domain_root = get_setting("DOMAIN_ROOT", required=False)
@@ -2112,26 +2132,6 @@ def api_diagnose_service(service_id):
                 "message": "Cannot retrieve origin rules from Cloudflare"
             }
     
-    # Check firewall status
-    rule_info = check_unifi_rule()
-    if rule_info is None:
-        diagnostics["checks"]["firewall"] = {
-            "status": "info",
-            "message": "Firewall control not configured"
-        }
-    elif rule_info.get("enabled"):
-        diagnostics["checks"]["firewall"] = {
-            "status": "ok",
-            "message": "Firewall rule is enabled",
-            "port": rule_info.get("port")
-        }
-    else:
-        diagnostics["checks"]["firewall"] = {
-            "status": "warning",
-            "message": "Firewall rule is disabled",
-            "port": rule_info.get("port")
-        }
-    
     # Check backend host connectivity
     target_url = service['target_url']
     try:
@@ -2203,17 +2203,23 @@ def api_diagnose_service(service_id):
             "target": target_url,
             "error": str(e)
         }
-    
+
+    # Add firewall group tests
+    firewall_group_results = _test_service_firewall(service_id)
+    if firewall_group_results:
+        if "error" in firewall_group_results:
+            diagnostics["checks"]["firewall_groups"] = {"status": "fail", "message": firewall_group_results["error"]}
+        elif "info" in firewall_group_results:
+            # Don't show info message if service is disabled, as it's redundant
+            if not (service and not service['enabled'] and "Service is disabled" in firewall_group_results["info"]):
+                 diagnostics["checks"]["firewall_groups"] = {"status": "info", "message": firewall_group_results["info"]}
+        else:
+            if firewall_group_results.get("ip_check"):
+                diagnostics["checks"]["firewall_ip_group"] = firewall_group_results["ip_check"]
+            if firewall_group_results.get("port_check"):
+                diagnostics["checks"]["firewall_port_group"] = firewall_group_results["port_check"]
+
     return jsonify(diagnostics)
-
-
-@app.route('/api/services/<int:service_id>/test-firewall', methods=['POST'])
-@api_key_or_login_required
-def api_test_service_firewall(service_id):
-    result = test_service_firewall(service_id)
-    status_code = result.pop("status_code", 200)
-    return jsonify(result), status_code
-
 
 @app.route('/api/services/<int:service_id>', methods=['DELETE'])
 @api_key_or_login_required
