@@ -664,11 +664,8 @@ def turn_on_service(service_id):
             print(f"   Updated existing Origin Rule: {service_origin_rule_name}")
         else:
             # Create a new rule for this service
-            # Try to get action from any existing rule as a template, or use default
-            existing_action = "route"
-            if rules and len(rules) > 0:
-                # Use the action from the first rule as a template
-                existing_action = rules[0].get('action', 'route')
+            # Try to get action from any existing rule as a template, or use default 'route'
+            existing_action = rules[0].get('action', 'route') if rules else 'route'
             
             new_rule_data = {
                 "expression": f"http.host eq \"{full_hostname}\"",
