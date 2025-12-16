@@ -2,6 +2,7 @@
 import redis
 import requests
 import random
+import threading
 import string
 import os
 import sys
@@ -11,6 +12,7 @@ from urllib.parse import urlparse
 import json
 import secrets
 import time
+from datetime import datetime
 import base64
 import hashlib
 import ipaddress
@@ -963,6 +965,113 @@ def toggle_unifi(enable_rule, forward_port=None, session=None, base_url=None):
 # Default Cloudflare Origin Rule action type
 DEFAULT_ORIGIN_ACTION = "route"
 
+def check_service_health(target_url, timeout=None):
+    """Check if service target is reachable."""
+    if not target_url:
+        return False
+    try:
+        if timeout is None:
+            timeout = int(get_setting("HEALTH_CHECK_TIMEOUT", required=False) or 1)
+            
+        requests.get(target_url, timeout=timeout, verify=False)
+        return True
+    except:
+        return False
+
+# Global cache for health status
+HEALTH_STATUS_CACHE = {}
+
+def send_discord_notification(message, title=None, color=None, webhook_url=None, msg_type='system'):
+    """Send a notification to Discord via Webhook."""
+    # Check notification settings
+    if msg_type == 'health' and db.get_setting('NOTIFY_EVENTS_HEALTH', '1') == '0':
+        return
+    if msg_type == 'system' and db.get_setting('NOTIFY_EVENTS_SYSTEM', '1') == '0':
+        return
+    
+    if not webhook_url:
+        webhook_url = get_setting("DISCORD_WEBHOOK_URL", required=False)
+        
+    if not webhook_url:
+        return
+
+    version = get_version()
+
+    embed = {
+        "description": message,
+        "color": color or 0x3498db,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "footer": {
+            "text": f"Traefik Route Control v{version}"
+        }
+    }
+    
+    if title:
+        embed["title"] = title
+
+    payload = {
+        "embeds": [embed]
+    }
+    
+    try:
+        requests.post(webhook_url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"⚠️ Failed to send Discord notification: {e}")
+
+def perform_health_check():
+    """Perform a single health check iteration."""
+    try:
+        timeout = int(get_setting("HEALTH_CHECK_TIMEOUT", required=False) or 1)
+    except:
+        timeout = 1
+        
+    try:
+        # Use a new connection for the thread/request
+        services = db.get_all_services()
+        for service in services:
+            if service['enabled']:
+                is_healthy = check_service_health(service['target_url'], timeout=timeout)
+                
+                # Check for status change
+                prev_healthy = HEALTH_STATUS_CACHE.get(service['id'])
+                
+                # Only notify if we had a previous status (to avoid startup spam) 
+                # AND the status has changed
+                if prev_healthy is not None and prev_healthy != is_healthy:
+                    if is_healthy:
+                        send_discord_notification(f"✅ Service **{service['name']}** is back ONLINE.", title="Health Alert: Recovered", color=0x2ecc71, msg_type='health')
+                    else:
+                        send_discord_notification(f"⚠️ Service **{service['name']}** is UNHEALTHY.", title="Health Alert: Failure", color=0xe74c3c, msg_type='health')
+                
+                HEALTH_STATUS_CACHE[service['id']] = is_healthy
+            else:
+                # Remove from cache if disabled
+                if service['id'] in HEALTH_STATUS_CACHE:
+                    del HEALTH_STATUS_CACHE[service['id']]
+        return True
+    except Exception as e:
+        print(f"⚠️ Health check error: {e}")
+        return False
+
+def health_check_loop():
+    """Background loop to check service health periodically."""
+    print("🔹 Starting background health check service...")
+    while True:
+        try:
+            interval = int(get_setting("HEALTH_CHECK_INTERVAL", required=False) or 60)
+        except:
+            interval = 60
+            
+        if interval < 10: interval = 10
+        
+        perform_health_check()
+        
+        time.sleep(interval)
+
+def start_health_check_thread():
+    thread = threading.Thread(target=health_check_loop, daemon=True)
+    thread.start()
+
 def get_status():
     """Get overall system status"""
     r = get_redis()
@@ -985,11 +1094,16 @@ def get_status():
         current_rule = r.get(f"traefik/http/routers/{service['router_name']}/rule")
         if current_rule:
             host = current_rule.replace("Host(`", "").replace("`)", "")
+            
+            # Check health
+            is_healthy = HEALTH_STATUS_CACHE.get(service['id'], True)
+            
             active_services.append({
                 "id": service['id'],
                 "name": service['name'],
                 "hostname": f"https://{host}",
-                "status": "ONLINE"
+                "status": "ONLINE",
+                "healthy": is_healthy
             })
     
     return {
@@ -2096,6 +2210,12 @@ def index():
         return redirect(url_for('onboarding'))
     
     services = db.get_all_services()
+    
+    # Inject health status
+    for service in services:
+        if service['enabled']:
+            service['healthy'] = HEALTH_STATUS_CACHE.get(service['id'], True)
+            
     settings = db.get_all_settings()
     return render_template('index.html', services=services, settings=settings)
 
@@ -2571,6 +2691,15 @@ def api_get_logs():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/health/check', methods=['POST'])
+@api_key_or_login_required
+def api_trigger_health_check():
+    """Trigger an immediate health check."""
+    if perform_health_check():
+        return jsonify({"message": "Health check completed"})
+    else:
+        return jsonify({"error": "Health check failed"}), 500
+
 @app.route('/api/services/all/on', methods=['POST'])
 @api_key_or_login_required
 def api_turn_on_all():
@@ -2628,6 +2757,19 @@ def api_reset_password(username):
     except Exception as e:
         print(f"❌ Error resetting password: {e}")
         return jsonify({"error": "Failed to save password"}), 500
+
+@app.route('/api/notifications/test', methods=['POST'])
+@login_required
+def api_test_notification():
+    """Send a test notification to Discord."""
+    data = request.get_json(silent=True) or {}
+    webhook_url = data.get('webhook_url') or get_setting("DISCORD_WEBHOOK_URL", required=False)
+    
+    if not webhook_url:
+        return jsonify({"error": "No Webhook URL provided"}), 400
+        
+    send_discord_notification("🔔 **Test Notification**\nTraefik Route Control is connected to Discord!", title="System Info", webhook_url=webhook_url, msg_type='test')
+    return jsonify({"success": True})
 
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
@@ -2726,6 +2868,7 @@ if __name__ == "__main__":
     elif args.action == "on" or args.action == "rotate":
         cmd_on()
     elif args.action == "serve":
+        start_health_check_thread()
         print(f"🚀 Starting Web UI on http://{API_HOST}:{API_PORT}")
         print(f"   Configure settings and services at http://{API_HOST}:{API_PORT}/settings")
         app.run(host=API_HOST, port=API_PORT, debug=False)

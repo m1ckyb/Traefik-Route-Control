@@ -4,6 +4,7 @@
 <div class="header-row">
     <h2>Services</h2>
     <div class="header-actions">
+        <button onclick="checkHealth(event)" class="btn btn-secondary">Check Health</button>
         <button onclick="showLogs()" class="btn btn-info">Logs</button>
         <button id="global-toggle-btn" class="btn btn-secondary" style="display: none;">Global Power</button>
         <a href="/services/new" class="btn btn-primary">+ Add Service</a>
@@ -26,13 +27,17 @@
             <div class="service-title-switch">
                 <label class="switch">
                     <input type="checkbox" {% if service.enabled %}checked{% endif %} onchange="toggleService({{ service.id }}, this.checked, event)">
-                    <span class="slider round"></span>
+                    <span class="slider round {% if service.enabled and service.healthy == False %}slider-error{% endif %}"></span>
                 </label>
                 <h3>{{ service.name }}</h3>
             </div>
             <div class="service-header-right">
-                <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
-                    {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
+                <span class="status-badge {% if service.enabled %}{% if service.healthy == False %}status-error{% else %}status-online{% endif %}{% else %}status-offline{% endif %}">
+                    {% if service.enabled %}
+                        {% if service.healthy == False %}UNHEALTHY{% else %}ONLINE{% endif %}
+                    {% else %}
+                        OFFLINE
+                    {% endif %}
                 </span>
                 <a href="/services/{{ service.id }}/edit" class="btn-icon" title="Edit Service">✏️</a>
                 <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
@@ -176,6 +181,25 @@ function turnAllOff() {
     }
 }
 
+function checkHealth(event) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Checking...';
+    btn.disabled = true;
+    
+    fetch('/api/health/check', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) alert('Error: ' + data.error);
+            else window.location.reload();
+        })
+        .catch(err => alert('Request failed'))
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+}
+
 function showLogs() {
     document.getElementById('logsModal').style.display = 'block';
     fetchLogs();
@@ -200,6 +224,19 @@ function fetchLogs() {
         });
 }
 </script>
+
+<style>
+.status-error {
+    background-color: #dc3545;
+    color: white;
+}
+.slider-error {
+    background-color: #dc3545 !important;
+}
+input:checked + .slider.slider-error {
+    background-color: #dc3545 !important;
+}
+</style>
 
 <div class="footer">
     <a href="https://github.com/m1ckyb/Traefik-Route-Control" target="_blank" class="footer-link">

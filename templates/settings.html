@@ -97,6 +97,53 @@
             </div>
         </div>
 
+        <h3>Health Check Settings</h3>
+        
+        <div class="form-group">
+            <label for="HEALTH_CHECK_INTERVAL">Check Interval (seconds)</label>
+            <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" required 
+                   value="{{ settings.get('HEALTH_CHECK_INTERVAL', '60') }}" min="10">
+            <small>How often to check service health in the background (min 10s)</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="HEALTH_CHECK_TIMEOUT">Request Timeout (seconds)</label>
+            <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" required 
+                   value="{{ settings.get('HEALTH_CHECK_TIMEOUT', '1') }}" min="1" max="30">
+            <small>Maximum time to wait for a service to respond</small>
+        </div>
+
+        <h3>Notification Settings</h3>
+        
+        <div class="form-group">
+            <label for="NOTIFY_EVENTS_HEALTH">Health Alerts</label>
+            <select id="NOTIFY_EVENTS_HEALTH" name="NOTIFY_EVENTS_HEALTH">
+                <option value="1" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '1' %}selected{% endif %}>Enabled</option>
+                <option value="0" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '0' %}selected{% endif %}>Disabled</option>
+            </select>
+            <small>Notify when services become unhealthy or recover</small>
+        </div>
+
+        <div class="form-group">
+            <label for="NOTIFY_EVENTS_SYSTEM">System Events</label>
+            <select id="NOTIFY_EVENTS_SYSTEM" name="NOTIFY_EVENTS_SYSTEM">
+                <option value="1" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '1' %}selected{% endif %}>Enabled</option>
+                <option value="0" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '0' %}selected{% endif %}>Disabled</option>
+            </select>
+            <small>Notify about system events (e.g. startup, shutdown)</small>
+        </div>
+
+        <div class="form-group">
+            <label for="DISCORD_WEBHOOK_URL">Discord Webhook URL</label>
+            <input type="text" id="DISCORD_WEBHOOK_URL" name="DISCORD_WEBHOOK_URL" 
+                   value="{{ settings.get('DISCORD_WEBHOOK_URL', '') }}"
+                   placeholder="https://discord.com/api/webhooks/...">
+            <small>Leave empty to disable notifications</small>
+        </div>
+        <div class="form-group">
+            <button type="button" class="btn btn-secondary" onclick="testDiscordWebhook(event)">🔔 Test Notification</button>
+        </div>
+
         <h3>Cloudflare Settings</h3>
         
         <div class="form-group">
@@ -427,6 +474,39 @@ async function generateRecoveryCodes() {
         }
     } catch (e) {
         alert('Error: ' + e.message);
+    }
+}
+
+async function testDiscordWebhook(event) {
+    const url = document.getElementById('DISCORD_WEBHOOK_URL').value;
+    if (!url) {
+        alert('Please enter a Webhook URL first');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/notifications/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({webhook_url: url})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            alert('Test notification sent successfully!');
+        } else {
+            alert('Error: ' + (data.error || 'Failed to send notification'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
     }
 }
 
