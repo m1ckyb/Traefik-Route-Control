@@ -36,10 +36,30 @@
         {% endif %}
         
         <div class="login-form">
+            {% if not is_setup %}
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab active" onclick="switchAuth('passkey')" id="tab-passkey">Passkey</button>
+                <button type="button" class="auth-tab" onclick="switchAuth('password')" id="tab-password">Password</button>
+            </div>
+            {% endif %}
+
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required 
                        placeholder="Enter your username" autocomplete="username">
+            </div>
+            
+            <div class="form-group" id="password-group" style="display: none;">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" 
+                       placeholder="Enter your password" autocomplete="current-password">
+            </div>
+
+            <div class="form-group" id="totp-group" style="display: none;">
+                <label for="totp_code">Two-Factor Code / Recovery Code</label>
+                <input type="text" id="totp_code" name="totp_code" 
+                       placeholder="Enter 6-digit code or recovery code" autocomplete="one-time-code" inputmode="text">
+                <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 5px;">Lost your device? Enter a recovery code above.</p>
             </div>
             
             {% if is_setup %}
@@ -49,8 +69,14 @@
             </button>
             {% endif %}
             {% else %}
-            <button type="button" class="btn btn-primary btn-block" onclick="authenticatePasskey()">
+            <button type="button" id="btn-passkey" class="btn btn-primary btn-block" onclick="authenticatePasskey()">
                 🔐 Sign In with Passkey
+            </button>
+            <button type="button" id="btn-password" class="btn btn-primary btn-block" onclick="authenticatePassword()" style="display: none;">
+                🔑 Sign In with Password
+            </button>
+            <button type="button" id="btn-totp" class="btn btn-primary btn-block" onclick="verify2FA()" style="display: none;">
+                🔐 Verify Code
             </button>
             {% endif %}
         </div>
@@ -63,6 +89,7 @@
     
     <script>
         const isSetup = {{ 'true' if is_setup else 'false' }};
+        let currentAuthMode = 'passkey';
         
         // Helper to convert ArrayBuffer to Base64URL (URL-safe)
         function arrayBufferToBase64(buffer) {
@@ -92,6 +119,27 @@
             return bytes.buffer;
         }
         
+        function switchAuth(mode) {
+            currentAuthMode = mode;
+            
+            // Update tabs
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + mode).classList.add('active');
+            
+            // Update inputs and buttons
+            if (mode === 'password') {
+                document.getElementById('password-group').style.display = 'block';
+                document.getElementById('btn-password').style.display = 'block';
+                document.getElementById('btn-passkey').style.display = 'none';
+                document.getElementById('totp-group').style.display = 'none';
+                document.getElementById('btn-totp').style.display = 'none';
+            } else {
+                document.getElementById('password-group').style.display = 'none';
+                document.getElementById('btn-password').style.display = 'none';
+                document.getElementById('btn-passkey').style.display = 'block';
+            }
+        }
+
         // Register a new passkey
         async function registerPasskey() {
             const username = document.getElementById('username').value.trim();
@@ -238,16 +286,136 @@
             }
         }
         
+        // Authenticate with password
+        async function authenticatePassword() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/auth/login/password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    alert(data.error || 'Authentication failed');
+                    return;
+                }
+                
+                if (data.success) {
+                    if (data.setup_2fa) {
+                        alert("Login successful.\n\n⚠️ Security Advice: Please set up Two-Factor Authentication (2FA) in Settings.");
+                        window.location.href = '/settings';
+                    } else {
+                        window.location.href = '/';
+                    }
+                } else if (data.require_2fa) {
+                    // Switch to 2FA input
+                    show2FAInput();
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Failed to login: ' + error.message);
+            }
+        }
+        
+        function show2FAInput() {
+            document.getElementById('username').parentElement.style.display = 'none';
+            document.getElementById('password-group').style.display = 'none';
+            document.getElementById('btn-password').style.display = 'none';
+            document.getElementById('tab-passkey').parentElement.style.display = 'none';
+            
+            document.getElementById('totp-group').style.display = 'block';
+            document.getElementById('btn-totp').style.display = 'block';
+            document.getElementById('totp_code').focus();
+        }
+
+        async function verify2FA() {
+            const code = document.getElementById('totp_code').value.trim();
+            if (!code) return;
+
+            try {
+                const response = await fetch('/auth/login/2fa', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ code: code })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    alert(data.error || 'Verification failed');
+                    return;
+                }
+                
+                if (data.success) {
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('2FA error:', error);
+                alert('Failed to verify code');
+            }
+        }
+
         // Allow Enter key to trigger login/register
         document.getElementById('username').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 if (isSetup) {
                     registerPasskey();
                 } else {
-                    authenticatePasskey();
+                    if (currentAuthMode === 'password') {
+                        document.getElementById('password').focus();
+                    } else {
+                        authenticatePasskey();
+                    }
                 }
             }
         });
+        
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                authenticatePassword();
+            }
+        });
+
+        document.getElementById('totp_code').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verify2FA();
+            }
+        });
     </script>
+    
+    <style>
+    .auth-tabs {
+        display: flex;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .auth-tab {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 0.75rem;
+        color: var(--text-dim);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+    }
+    .auth-tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        font-weight: bold;
+    }
+    </style>
 </body>
 </html>

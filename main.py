@@ -18,6 +18,7 @@ import socket
 from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from webauthn import (
     generate_registration_options,
@@ -33,6 +34,13 @@ from webauthn.helpers.structs import (
     AuthenticatorAttachment,
     ResidentKeyRequirement,
 )
+try:
+    import pyotp
+    import qrcode
+    from io import BytesIO
+except ImportError:
+    pyotp = None
+    qrcode = None
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
 
@@ -204,6 +212,26 @@ def get_public_ip():
         return requests.get("https://api.ipify.org", timeout=5).text
     except:
         return "Unknown"
+
+# Rate limiting storage
+LOGIN_ATTEMPTS = {}
+
+def check_rate_limit(ip_address, limit=5, window=60):
+    """Simple in-memory rate limiting."""
+    current_time = time.time()
+    if ip_address not in LOGIN_ATTEMPTS:
+        LOGIN_ATTEMPTS[ip_address] = []
+    
+    # Filter out timestamps older than the window
+    LOGIN_ATTEMPTS[ip_address] = [t for t in LOGIN_ATTEMPTS[ip_address] if current_time - t < window]
+    
+    # Check if limit reached
+    if len(LOGIN_ATTEMPTS[ip_address]) >= limit:
+        return False
+    
+    # Add current attempt
+    LOGIN_ATTEMPTS[ip_address].append(current_time)
+    return True
 
 def check_port_open(port, session=None, base_url=None):
     """
@@ -1130,11 +1158,19 @@ def turn_off_service(service_id):
     print(f"✅ {service['name']} ACCESS DISABLED.\n")
     return {"message": f"{service['name']} disabled successfully"}
 
-def turn_on_service(service_id):
+def turn_on_service(service_id, force=False):
     """Turn on a specific service"""
     service = db.get_service(service_id)
     if not service:
         return {"error": "Service not found"}
+    
+    if service.get('enabled') and not force:
+        print(f"ℹ️ {service['name']} is already online. Ignoring request.")
+        return {
+            "message": f"{service['name']} is already online",
+            "url": f"https://{service.get('current_hostname')}",
+            "port": service.get('current_port')
+        }
     
     print(f"\n🚀 === ENABLING {service['name']} ===")
     
@@ -1779,6 +1815,271 @@ def login_complete():
         session.pop('authentication_origin', None)
         return jsonify({"error": str(e)}), 400
 
+@app.route('/auth/login/password', methods=['POST'])
+def login_password():
+    """Handle username/password login."""
+    # Check rate limit (5 attempts per minute)
+    if not check_rate_limit(request.remote_addr):
+        return jsonify({"error": "Too many login attempts. Please try again in a minute."}), 429
+
+    data = request.get_json(silent=True) or request.form
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+        
+    user = db.get_user_by_username(username)
+    if not user:
+        return jsonify({"error": "Invalid credentials"}), 401
+        
+    pwhash = user.get('password_hash')
+    if not pwhash or not check_password_hash(pwhash, password):
+        return jsonify({"error": "Invalid credentials"}), 401
+        
+    # Check if 2FA is enabled
+    if user.get('totp_secret') and pyotp:
+        session['pre_2fa_user_id'] = user['id']
+        return jsonify({"require_2fa": True})
+        
+    login_user(User(user['id'], user['username']))
+    
+    # Advise setup if not enabled
+    return jsonify({"success": True, "setup_2fa": True})
+
+@app.before_request
+def check_2fa_enforcement():
+    """Enforce 2FA globally if enabled."""
+    if current_user.is_authenticated:
+        # Skip for static resources and auth-related routes to prevent lockout loops
+        if request.path.startswith('/static') or \
+           request.path.startswith('/auth') or \
+           request.path == '/logout' or \
+           request.path == '/settings':
+            return
+
+        # Skip API routes (handled by their own auth decorators usually)
+        if request.path.startswith('/api'):
+            return
+
+        enforce = db.get_setting('ENFORCE_2FA') == '1'
+        user = db.get_user(current_user.id)
+        
+        # If enforced and no TOTP secret, redirect to settings
+        if enforce and user and not user.get('totp_secret'):
+            flash('⚠️ Two-Factor Authentication is enforced globally. Please set it up immediately to continue.', 'error')
+            return redirect(url_for('settings'))
+
+@app.route('/auth/login/2fa', methods=['POST'])
+def login_2fa():
+    """Verify 2FA code after password check."""
+    if not pyotp:
+        return jsonify({"error": "2FA support not available"}), 501
+        
+    user_id = session.get('pre_2fa_user_id')
+    if not user_id:
+        return jsonify({"error": "Session expired, please login again"}), 400
+        
+    data = request.get_json(silent=True) or request.form
+    code = data.get('code')
+    
+    if not code:
+        return jsonify({"error": "Code required"}), 400
+        
+    user = db.get_user(user_id)
+    if not user or not user.get('totp_secret'):
+        return jsonify({"error": "User invalid"}), 400
+        
+    totp = pyotp.TOTP(user['totp_secret'])
+    if totp.verify(code):
+        login_user(User(user['id'], user['username']))
+        session.pop('pre_2fa_user_id', None)
+        return jsonify({"success": True})
+    
+    # Check Recovery Codes
+    unused_codes = db.get_unused_recovery_codes(user['id'])
+    for rc in unused_codes:
+        if check_password_hash(rc['code_hash'], code):
+            db.mark_recovery_code_used(rc['id'])
+            login_user(User(user['id'], user['username']))
+            session.pop('pre_2fa_user_id', None)
+            return jsonify({"success": True, "message": "Logged in with recovery code"})
+    
+    return jsonify({"error": "Invalid authentication code"}), 400
+
+@app.route('/auth/password/change', methods=['POST'])
+@login_required
+def change_password():
+    """Change password for the current user."""
+    data = request.get_json(silent=True) or request.form
+    new_password = data.get('new_password')
+    
+    if not new_password:
+        return jsonify({"error": "New password required"}), 400
+        
+    if len(new_password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+        
+    pwhash = generate_password_hash(new_password)
+    try:
+        db.update_user_password(current_user.id, pwhash)
+        return jsonify({"success": True, "message": "Password updated successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/auth/passkey/add/begin', methods=['POST'])
+@login_required
+def add_passkey_begin():
+    """Begin registration of a new passkey for logged-in user."""
+    user = db.get_user(current_user.id)
+    
+    rp_id = get_expected_rp_id()
+    origin = get_expected_origin()
+    
+    # Get existing credentials to exclude them
+    existing_credentials = db.get_credentials_for_user(user['id'])
+    exclude_credentials = [
+        PublicKeyCredentialDescriptor(id=bytes.fromhex(cred['credential_id']))
+        for cred in existing_credentials
+    ]
+    
+    registration_options = generate_registration_options(
+        rp_id=rp_id,
+        rp_name=RP_NAME,
+        user_id=str(user['id']).encode(),
+        user_name=user['username'],
+        user_display_name=user['username'],
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
+            resident_key=ResidentKeyRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.PREFERRED
+        ),
+        exclude_credentials=exclude_credentials,
+        supported_pub_key_algs=[
+            COSEAlgorithmIdentifier.ECDSA_SHA_256,
+            COSEAlgorithmIdentifier.RSASSA_PKCS1_v1_5_SHA_256,
+        ]
+    )
+    
+    session['add_passkey_challenge'] = registration_options.challenge.hex()
+    session['add_passkey_rp_id'] = rp_id
+    session['add_passkey_origin'] = origin
+    
+    return jsonify(json.loads(options_to_json(registration_options)))
+
+@app.route('/auth/passkey/add/complete', methods=['POST'])
+@login_required
+def add_passkey_complete():
+    """Complete registration of a new passkey."""
+    data = request.json
+    credential = data.get('credential')
+    
+    if not credential:
+        return jsonify({"error": "Credential required"}), 400
+        
+    challenge = session.get('add_passkey_challenge')
+    rp_id = session.get('add_passkey_rp_id')
+    origin = session.get('add_passkey_origin')
+    
+    if not challenge or not rp_id or not origin:
+        return jsonify({"error": "Invalid or expired session"}), 400
+        
+    try:
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=bytes.fromhex(challenge),
+            expected_rp_id=rp_id,
+            expected_origin=origin,
+        )
+        
+        db.add_credential(
+            user_id=current_user.id,
+            credential_id=verification.credential_id.hex(),
+            public_key=verification.credential_public_key.hex()
+        )
+        
+        # Clear session
+        session.pop('add_passkey_challenge', None)
+        session.pop('add_passkey_rp_id', None)
+        session.pop('add_passkey_origin', None)
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/auth/2fa/setup/begin', methods=['POST'])
+@login_required
+def setup_2fa_begin():
+    """Generate TOTP secret and QR code."""
+    if not pyotp or not qrcode:
+        return jsonify({"error": "2FA libraries not installed"}), 501
+        
+    # Generate secret
+    secret = pyotp.random_base32()
+    session['totp_setup_secret'] = secret
+    
+    # Generate URI
+    user = db.get_user(current_user.id)
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user['username'], issuer_name="Traefik Control")
+    
+    # Generate QR Code
+    img = qrcode.make(uri)
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return jsonify({
+        "secret": secret,
+        "qr_code": f"data:image/png;base64,{img_str}"
+    })
+
+@app.route('/auth/2fa/setup/complete', methods=['POST'])
+@login_required
+def setup_2fa_complete():
+    """Verify and save TOTP secret."""
+    if not pyotp:
+        return jsonify({"error": "2FA support not available"}), 501
+        
+    data = request.get_json(silent=True)
+    code = data.get('code')
+    secret = session.get('totp_setup_secret')
+    
+    if not code or not secret:
+        return jsonify({"error": "Invalid request"}), 400
+        
+    totp = pyotp.TOTP(secret)
+    if totp.verify(code):
+        db.update_user_totp(current_user.id, secret)
+        session.pop('totp_setup_secret', None)
+        return jsonify({"success": True})
+    
+    return jsonify({"error": "Invalid code"}), 400
+
+@app.route('/auth/2fa/disable', methods=['POST'])
+@login_required
+def disable_2fa():
+    """Disable 2FA for current user."""
+    # In a production app, you might want to require a password/code check here
+    db.update_user_totp(current_user.id, None)
+    return jsonify({"success": True})
+
+@app.route('/auth/2fa/recovery-codes/generate', methods=['POST'])
+@login_required
+def generate_recovery_codes():
+    """Generate new recovery codes."""
+    # Delete existing codes
+    db.delete_all_recovery_codes(current_user.id)
+    
+    codes = []
+    # Generate 10 codes, 10 chars hex (20 chars total)
+    for _ in range(10):
+        code = secrets.token_hex(5)
+        codes.append(code)
+        # Hash and store
+        db.add_recovery_code(current_user.id, generate_password_hash(code))
+    
+    return jsonify({"codes": codes})
+
 @app.route('/')
 def index():
     # Allow access during setup window if no users exist
@@ -1888,7 +2189,15 @@ def settings():
             flash(f'Error: {str(e)}', 'error')
     
     settings = db.get_all_settings()
-    return render_template('settings.html', settings=settings)
+    
+    # Add user info for credential management
+    user = db.get_user(current_user.id)
+    has_password = bool(user.get('password_hash'))
+    credentials = db.get_credentials_for_user(current_user.id)
+    has_2fa = bool(user.get('totp_secret'))
+    unused_recovery_codes = len(db.get_unused_recovery_codes(current_user.id))
+    
+    return render_template('settings.html', settings=settings, has_password=has_password, credentials=credentials, has_2fa=has_2fa, recovery_codes_count=unused_recovery_codes)
 
 # API Routes
 @app.route('/api/status', methods=['GET'])
@@ -1913,7 +2222,13 @@ def api_firewall_status():
 @app.route('/api/services/<int:service_id>/on', methods=['POST'])
 @api_key_or_login_required
 def api_turn_on(service_id):
-    result = turn_on_service(service_id)
+    force = False
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if data:
+            force = data.get('force', False)
+    
+    result = turn_on_service(service_id, force=force)
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)
@@ -2286,6 +2601,33 @@ def api_sync_firewall():
         return jsonify({"message": "Firewall sync triggered"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/users/<username>/reset-password', methods=['POST'])
+@api_key_or_login_required
+def api_reset_password(username):
+    """Reset password for a user and show it in logs."""
+    # Check rate limit (5 attempts per minute)
+    if not check_rate_limit(request.remote_addr):
+        return jsonify({"error": "Too many attempts. Please try again in a minute."}), 429
+
+    user = db.get_user_by_username(username)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    # Generate random password
+    alphabet = string.ascii_letters + string.digits
+    password = ''.join(secrets.choice(alphabet) for i in range(12))
+    
+    pwhash = generate_password_hash(password)
+    try:
+        db.update_user_password(user['id'], pwhash)
+        print(f"\n🔐 PASSWORD RESET FOR USER: {username}")
+        print(f"   New Password: {password}")
+        print(f"   (This will only be shown once in the logs)\n")
+        return jsonify({"message": "Password reset successfully. Check logs for the new password."})
+    except Exception as e:
+        print(f"❌ Error resetting password: {e}")
+        return jsonify({"error": "Failed to save password"}), 500
 
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])

@@ -1,5 +1,5 @@
 # Use a lightweight Python base image
-FROM python:3.11-slim
+FROM python:alpine
 
 # Set environment variables to prevent python from writing pyc files
 # and to flush stdout/stderr immediately

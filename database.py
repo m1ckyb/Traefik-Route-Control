@@ -122,6 +122,38 @@ def init_db():
                 conn.execute("ALTER TABLE services ADD COLUMN current_port INTEGER")
             conn.execute("INSERT INTO schema_version (version) VALUES (4)")
         
+        # Migration 5: Add password_hash column to users table
+        if current_version < 5:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'password_hash' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+            conn.execute("INSERT INTO schema_version (version) VALUES (5)")
+        
+        # Migration 6: Add totp_secret column to users table
+        if current_version < 6:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'totp_secret' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+            conn.execute("INSERT INTO schema_version (version) VALUES (6)")
+        
+        # Migration 7: Create recovery_codes table
+        if current_version < 7:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recovery_codes'")
+            if not cursor.fetchone():
+                conn.execute("""
+                    CREATE TABLE recovery_codes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        code_hash TEXT NOT NULL,
+                        used INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                    )
+                """)
+            conn.execute("INSERT INTO schema_version (version) VALUES (7)")
+        
         conn.commit()
 
 @contextmanager
@@ -259,6 +291,26 @@ def update_user_onboarding_status(user_id, completed=True):
         """, (1 if completed else 0, user_id))
         conn.commit()
 
+def update_user_password(user_id, password_hash):
+    """Update user's password hash."""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET password_hash = ?
+            WHERE id = ?
+        """, (password_hash, user_id))
+        conn.commit()
+
+def update_user_totp(user_id, totp_secret):
+    """Update user's TOTP secret."""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE users 
+            SET totp_secret = ?
+            WHERE id = ?
+        """, (totp_secret, user_id))
+        conn.commit()
+
 def count_users():
     """Count total users."""
     with get_db() as conn:
@@ -303,6 +355,31 @@ def delete_credential(credential_id):
     """Delete a credential."""
     with get_db() as conn:
         conn.execute("DELETE FROM webauthn_credentials WHERE credential_id = ?", (credential_id,))
+        conn.commit()
+
+# Recovery Code operations
+def add_recovery_code(user_id, code_hash):
+    """Add a single recovery code hash."""
+    with get_db() as conn:
+        conn.execute("INSERT INTO recovery_codes (user_id, code_hash) VALUES (?, ?)", (user_id, code_hash))
+        conn.commit()
+
+def get_unused_recovery_codes(user_id):
+    """Get all unused recovery codes for a user."""
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM recovery_codes WHERE user_id = ? AND used = 0", (user_id,))
+        return [dict(row) for row in cursor.fetchall()]
+
+def mark_recovery_code_used(code_id):
+    """Mark a recovery code as used."""
+    with get_db() as conn:
+        conn.execute("UPDATE recovery_codes SET used = 1 WHERE id = ?", (code_id,))
+        conn.commit()
+
+def delete_all_recovery_codes(user_id):
+    """Delete all recovery codes for a user (used when regenerating)."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM recovery_codes WHERE user_id = ?", (user_id,))
         conn.commit()
 
 # API Key operations

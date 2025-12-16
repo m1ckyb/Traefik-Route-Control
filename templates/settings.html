@@ -7,6 +7,89 @@
     <h2>Global Settings</h2>
     
     <form method="POST" class="settings-form">
+        <div class="form-group" style="background: var(--bg-card); padding: 1rem; border: 1px solid var(--border); border-radius: 4px;">
+            <label for="ENFORCE_2FA" style="font-weight: bold; color: var(--primary);">🛡️ Enforce 2FA Globally</label>
+            <select id="ENFORCE_2FA" name="ENFORCE_2FA">
+                <option value="0" {% if settings.get('ENFORCE_2FA', '0') == '0' %}selected{% endif %}>Disabled (Optional)</option>
+                <option value="1" {% if settings.get('ENFORCE_2FA', '0') == '1' %}selected{% endif %}>Enabled (Mandatory)</option>
+            </select>
+            <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">If enabled, all users will be forced to set up 2FA to access the dashboard.</p>
+        </div>
+
+        <h3>Security</h3>
+        
+        <div class="security-section">
+            <div class="form-group">
+                <label>Password</label>
+                <div class="password-actions">
+                    {% if has_password %}
+                        <p class="status-text">✅ Password is set</p>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="togglePasswordForm()">Change Password</button>
+                    {% else %}
+                        <p class="status-text warning">⚠️ No password set</p>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="togglePasswordForm()">Set Password</button>
+                    {% endif %}
+                </div>
+                
+                <div id="password-form" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px;">
+                    <div class="form-group">
+                        <label for="new_password">New Password (min 8 chars)</label>
+                        <input type="password" id="new_password" placeholder="Enter new password">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="savePassword()">Save Password</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Passkeys</label>
+                <ul class="passkey-list">
+                    {% for cred in credentials %}
+                    <li>🔑 Passkey added on {{ cred.created_at }}</li>
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addPasskey()">➕ Add New Passkey</button>
+            </div>
+
+            <div class="form-group">
+                <label>Two-Factor Authentication (2FA)</label>
+                <div class="2fa-actions">
+                    {% if has_2fa %}
+                        <p class="status-text">✅ 2FA is enabled</p>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="disable2FA()">Disable 2FA</button>
+                    {% else %}
+                        <p class="status-text warning">⚠️ 2FA is not enabled</p>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="setup2FA()">Setup 2FA</button>
+                    {% endif %}
+                </div>
+                
+                <div id="2fa-setup" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
+                    <p>Scan this QR code with your authenticator app:</p>
+                    <img id="qr-code-img" src="" alt="QR Code" style="background: white; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <p>Then enter the 6-digit code below:</p>
+                    <input type="text" id="setup_totp_code" placeholder="123456" style="width: 150px; text-align: center; margin-bottom: 10px;">
+                    <button type="button" class="btn btn-primary btn-block" onclick="verifySetup2FA()">Verify & Enable</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Recovery Codes</label>
+                <div class="recovery-actions">
+                    <p class="status-text">
+                        {% if recovery_codes_count > 0 %}
+                        ✅ {{ recovery_codes_count }} unused codes remaining
+                        {% else %}
+                        ⚠️ No recovery codes generated
+                        {% endif %}
+                    </p>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="generateRecoveryCodes()">🔄 Generate New Codes</button>
+                </div>
+                <div id="recovery-codes-display" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px;">
+                    <p class="warning" style="margin-bottom: 0.5rem;">⚠️ Save these codes somewhere safe. They will not be shown again.</p>
+                    <div id="codes-list" style="font-family: monospace; font-size: 1.1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;"></div>
+                </div>
+            </div>
+        </div>
+
         <h3>Cloudflare Settings</h3>
         
         <div class="form-group">
@@ -152,6 +235,182 @@
 </div>
 
 <script>
+// WebAuthn Helpers
+function arrayBufferToBase64(buffer) {
+    const binary = Array.from(new Uint8Array(buffer), byte => String.fromCharCode(byte)).join('');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function base64ToArrayBuffer(base64) {
+    let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+    while (standardBase64.length % 4 !== 0) standardBase64 += '=';
+    const binary = atob(standardBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+}
+
+function togglePasswordForm() {
+    const form = document.getElementById('password-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function savePassword() {
+    const password = document.getElementById('new_password').value;
+    if (password.length < 8) {
+        alert('Password must be at least 8 characters long');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/auth/password/change', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({new_password: password})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            alert('Password updated successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error updating password: ' + e.message);
+    }
+}
+
+async function addPasskey() {
+    try {
+        // 1. Get options
+        const optionsResponse = await fetch('/auth/passkey/add/begin', {
+            method: 'POST'
+        });
+        
+        if (!optionsResponse.ok) throw new Error('Failed to start registration');
+        const options = await optionsResponse.json();
+        
+        // 2. Convert buffers
+        options.challenge = base64ToArrayBuffer(options.challenge);
+        options.user.id = base64ToArrayBuffer(options.user.id);
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(c => ({
+                ...c,
+                id: base64ToArrayBuffer(c.id)
+            }));
+        }
+        
+        // 3. Create credential
+        const credential = await navigator.credentials.create({
+            publicKey: options
+        });
+        
+        // 4. Prepare response
+        const credentialData = {
+            id: credential.id,
+            rawId: arrayBufferToBase64(credential.rawId),
+            response: {
+                attestationObject: arrayBufferToBase64(credential.response.attestationObject),
+                clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON)
+            },
+            type: credential.type
+        };
+        
+        // 5. Send to server
+        const verifyResponse = await fetch('/auth/passkey/add/complete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({credential: credentialData})
+        });
+        
+        const result = await verifyResponse.json();
+        if (verifyResponse.ok) {
+            alert('Passkey added successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Failed to add passkey: ' + e.message);
+    }
+}
+
+async function setup2FA() {
+    try {
+        const response = await fetch('/auth/2fa/setup/begin', { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('qr-code-img').src = data.qr_code;
+            document.getElementById('2fa-setup').style.display = 'block';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Failed to start 2FA setup: ' + e.message);
+    }
+}
+
+async function verifySetup2FA() {
+    const code = document.getElementById('setup_totp_code').value;
+    if (!code) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/setup/complete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({code: code})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            alert('2FA Enabled Successfully!');
+            location.reload();
+        } else {
+            alert('Verification failed: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function disable2FA() {
+    if (!confirm('Are you sure you want to disable 2FA? This will reduce your account security.')) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/disable', { method: 'POST' });
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function generateRecoveryCodes() {
+    if (!confirm('Generating new codes will invalidate any existing recovery codes. Continue?')) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/recovery-codes/generate', { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            const list = document.getElementById('codes-list');
+            list.innerHTML = '';
+            data.codes.forEach(code => {
+                const el = document.createElement('div');
+                el.textContent = code;
+                list.appendChild(el);
+            });
+            document.getElementById('recovery-codes-display').style.display = 'block';
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
 function toggleHomeAssistantSettings() {
     const enabled = document.getElementById('HASS_ENABLED').value === '1';
     const hassSettings = document.getElementById('hass-settings');
@@ -185,4 +444,14 @@ function syncFirewall() {
     }
 }
 </script>
+
+<style>
+.security-section {
+    background: var(--bg-card);
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 2rem;
+}
+</style>
 {% endblock %}

@@ -5,3 +5,5 @@ Flask
 gunicorn
 Flask-Login
 webauthn
+pyotp
+qrcode[pil]
