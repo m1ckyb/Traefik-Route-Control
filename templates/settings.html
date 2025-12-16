@@ -65,6 +65,13 @@
                 <div id="2fa-setup" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
                     <p>Scan this QR code with your authenticator app:</p>
                     <img id="qr-code-img" src="" alt="QR Code" style="background: white; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <div style="margin: 10px 0;">
+                        <p style="font-size: 0.9em; color: var(--text-dim); margin-bottom: 5px;">Or enter code manually:</p>
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+                            <code id="totp-secret-display" style="background: var(--bg-card); padding: 5px 10px; border-radius: 4px; font-family: monospace; font-weight: bold;"></code>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="copyTotpSecret()">📋 Copy</button>
+                        </div>
+                    </div>
                     <p>Then enter the 6-digit code below:</p>
                     <input type="text" id="setup_totp_code" placeholder="123456" style="width: 150px; text-align: center; margin-bottom: 10px;">
                     <button type="button" class="btn btn-primary btn-block" onclick="verifySetup2FA()">Verify & Enable</button>
@@ -344,12 +351,24 @@ async function setup2FA() {
         
         if (response.ok) {
             document.getElementById('qr-code-img').src = data.qr_code;
+            document.getElementById('totp-secret-display').textContent = data.secret;
             document.getElementById('2fa-setup').style.display = 'block';
         } else {
             alert('Error: ' + data.error);
         }
     } catch (e) {
         alert('Failed to start 2FA setup: ' + e.message);
+    }
+}
+
+function copyTotpSecret() {
+    const secret = document.getElementById('totp-secret-display').textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(secret).then(() => {
+            alert('Secret copied to clipboard!');
+        });
+    } else {
+        prompt("Copy this code:", secret);
     }
 }
 
