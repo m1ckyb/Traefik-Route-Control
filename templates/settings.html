@@ -7,7 +7,7 @@
     <h2>Global Settings</h2>
     
     <form method="POST" class="settings-form">
-        <div class="form-group" style="background: var(--bg-card); padding: 1rem; border: 1px solid var(--border); border-radius: 4px;">
+        <div class="form-group" style="background: var(--bg-card); padding: 1rem; border: 1px solid var(--border); border-radius: 4px; display: none;">
             <label for="ENFORCE_2FA" style="font-weight: bold; color: var(--primary);">🛡️ Enforce 2FA Globally</label>
             <select id="ENFORCE_2FA" name="ENFORCE_2FA">
                 <option value="0" {% if settings.get('ENFORCE_2FA', '0') == '0' %}selected{% endif %}>Disabled (Optional)</option>
@@ -471,6 +471,10 @@ function syncFirewall() {
     border: 1px solid var(--border);
     border-radius: 4px;
     margin-bottom: 2rem;
+    grid-column: span 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
 }
 </style>
 {% endblock %}
