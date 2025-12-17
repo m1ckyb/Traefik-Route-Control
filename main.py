@@ -2316,8 +2316,45 @@ def settings():
     credentials = db.get_credentials_for_user(current_user.id)
     has_2fa = bool(user.get('totp_secret'))
     unused_recovery_codes = len(db.get_unused_recovery_codes(current_user.id))
+
+    # Data for API Keys
+    api_keys = db.get_api_keys_for_user(current_user.id)
+
+    # Data for System Info
+    version = get_version()
+    uptime_seconds = int(time.time() - STARTUP_TIME)
     
-    return render_template('settings.html', settings=settings, has_password=has_password, credentials=credentials, has_2fa=has_2fa, recovery_codes_count=unused_recovery_codes)
+    # Format uptime
+    days, remainder = divmod(uptime_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+    
+    db_stats = db.get_db_stats()
+    
+    # Format DB size
+    size = db_stats.get('size_bytes', 0)
+    db_size_str = "0 B"
+    if size > 0:
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024:
+                db_size_str = f"{size:.2f} {unit}"
+                break
+            size /= 1024
+        else:
+            db_size_str = f"{size:.2f} TB"
+    
+    return render_template('settings.html', 
+                          settings=settings, 
+                          has_password=has_password, 
+                          credentials=credentials, 
+                          has_2fa=has_2fa, 
+                          recovery_codes_count=unused_recovery_codes,
+                          api_keys=api_keys,
+                          version=version,
+                          uptime=uptime_str,
+                          db_stats=db_stats,
+                          db_size=db_size_str)
 
 # API Routes
 @app.route('/api/status', methods=['GET'])
@@ -2930,13 +2967,6 @@ def api_legacy_turn_off():
     return jsonify(result)
 
 # API Key Management Routes
-@app.route('/api-keys', methods=['GET'])
-@login_required
-def api_keys_page():
-    """Show API key management page"""
-    api_keys = db.get_api_keys_for_user(current_user.id)
-    return render_template('api_keys.html', api_keys=api_keys)
-
 @app.route('/api-keys/create', methods=['POST'])
 @login_required
 def create_api_key():
@@ -2956,10 +2986,10 @@ def create_api_key():
         # Store temporarily in session to show on redirect (only shown once)
         session['new_api_key'] = api_key
         
-        return redirect(url_for('api_keys_page'))
+        return redirect(url_for('settings'))
     except Exception as e:
         flash(f'Error creating API key: {str(e)}', 'error')
-        return redirect(url_for('api_keys_page'))
+        return redirect(url_for('settings'))
 
 @app.route('/api-keys/<int:key_id>/delete', methods=['POST'])
 @login_required
@@ -2970,45 +3000,14 @@ def delete_api_key_route(key_id):
         keys = db.get_api_keys_for_user(current_user.id)
         if not any(k['id'] == key_id for k in keys):
             flash('API key not found', 'error')
-            return redirect(url_for('api_keys_page'))
+            return redirect(url_for('settings'))
         
         db.delete_api_key(key_id)
         flash('API key deleted successfully', 'success')
-        return redirect(url_for('api_keys_page'))
+        return redirect(url_for('settings'))
     except Exception as e:
         flash(f'Error deleting API key: {str(e)}', 'error')
-        return redirect(url_for('api_keys_page'))
-
-@app.route('/system', methods=['GET'])
-@login_required
-def system_page():
-    """Show system information page."""
-    version = get_version()
-    uptime_seconds = int(time.time() - STARTUP_TIME)
-    
-    # Format uptime
-    days, remainder = divmod(uptime_seconds, 86400)
-    hours, remainder = divmod(remainder, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
-    
-    db_stats = db.get_db_stats()
-    
-    # Format DB size
-    size = db_stats.get('size_bytes', 0)
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
-            db_size_str = f"{size:.2f} {unit}"
-            break
-        size /= 1024
-    else:
-        db_size_str = f"{size:.2f} TB"
-        
-    return render_template('system.html', 
-                          version=version, 
-                          uptime=uptime_str, 
-                          db_stats=db_stats,
-                          db_size=db_size_str)
+        return redirect(url_for('settings'))
 
 @app.route('/api/system', methods=['GET'])
 @api_key_or_login_required

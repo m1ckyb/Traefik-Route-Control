@@ -13,6 +13,7 @@
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-monitoring')">Monitoring</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-infrastructure')">Infrastructure</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-integrations')">Integrations</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-system')">System Info</button>
         </div>
 
         <!-- Tab: General -->
@@ -28,19 +29,21 @@
             </div>
 
             <h3>Backup & Restore</h3>
-            <div class="form-group">
-                <label>Backup Configuration</label>
-                <button type="button" class="btn btn-secondary" onclick="window.location.href='/api/settings/backup'">⬇️ Download Settings Backup</button>
-                <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Download all current settings as a JSON file.</p>
-            </div>
-
-            <div class="form-group">
-                <label>Restore Configuration</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="file" id="restore_file" accept=".json" style="flex: 1;">
-                    <button type="button" class="btn btn-secondary" onclick="restoreSettings()">⬆️ Restore</button>
+            <div class="settings-grid-2-col">
+                <div class="form-group">
+                    <label>Backup Configuration</label>
+                    <button type="button" class="btn btn-secondary" onclick="window.location.href='/api/settings/backup'">⬇️ Download Settings Backup</button>
+                    <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Download all current settings as a JSON file.</p>
                 </div>
-                <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Upload a previously backed up JSON file to restore settings.</p>
+
+                <div class="form-group">
+                    <label>Restore Configuration</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="restore_file" accept=".json" style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="restoreSettings()">⬆️ Restore</button>
+                    </div>
+                    <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Upload a previously backed up JSON file to restore settings.</p>
+                </div>
             </div>
         </div>
 
@@ -55,11 +58,15 @@
             <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">If enabled, all users will be forced to set up 2FA to access the dashboard.</p>
         </div>
 
-        <h3>Security Settings</h3>
-        
-        <div class="security-section">
-            <div class="form-group">
-                <label>Password</label>
+                <h3>Security Settings</h3>
+
+                
+
+                <div class="settings-grid-2-col">
+
+                    <div class="form-group">
+
+                        <label>Password</label>
                 <div class="password-actions">
                     {% if has_password %}
                         <p class="status-text">✅ Password is set</p>
@@ -135,124 +142,196 @@
                 </div>
             </div>
         </div>
+
+        <div class="heading-with-button">
+            <h3 style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 2rem;">API Keys</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="showApiEndpointsModal()">View API Endpoints</button>
+        </div>
+        
+        {% if session.get('new_api_key') %}
+        <div class="alert alert-success">
+            <h4>⚠️ New API Key Created</h4>
+            <p><strong>Save this key now - it will not be shown again!</strong></p>
+            <div class="api-key-display">
+                <code id="new-api-key">{{ session.pop('new_api_key') }}</code>
+                <button type="button" onclick="copyApiKey()" class="btn btn-secondary">Copy</button>
+                <span id="copy-status" class="copy-status"></span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="api-key-section">
+            <div class="section">
+                <h4>Create New API Key</h4>
+                <form method="POST" action="/api-keys/create" class="form-horizontal">
+                    <div class="form-group">
+                        <label for="name">Key Name:</label>
+                        <input type="text" id="name" name="name" placeholder="e.g., Home Automation Script" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Key</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h4>Your API Keys</h4>
+                {% if api_keys %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Created</th>
+                            <th>Last Used</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key in api_keys %}
+                        <tr>
+                            <td>{{ key.name }}</td>
+                            <td>{{ key.created_at }}</td>
+                            <td>{{ key.last_used_at or 'Never' }}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm" 
+                                        onclick="showDeleteConfirm({{ key.id }}, '{{ key.name }}')">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>No API keys created yet.</p>
+                {% endif %}
+            </div>
+        </div>
         </div>
 
         <!-- Tab: Monitoring -->
         <div id="tab-monitoring" class="tab-content" style="display: none;">
         <h3>Health Check</h3>
-        
-        <div class="form-group">
-            <label for="HEALTH_CHECK_INTERVAL">Check Interval (seconds) <span class="tooltip-icon" data-tooltip="How often to check service health in the background (min 10s)">ℹ️</span></label>
-            <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" required 
-                   value="{{ settings.get('HEALTH_CHECK_INTERVAL', '60') }}" min="10">
-        </div>
-        
-        <div class="form-group">
-            <label for="HEALTH_CHECK_TIMEOUT">Request Timeout (seconds) <span class="tooltip-icon" data-tooltip="Maximum time to wait for a service to respond">ℹ️</span></label>
-            <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" required 
-                   value="{{ settings.get('HEALTH_CHECK_TIMEOUT', '1') }}" min="1" max="30">
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="HEALTH_CHECK_INTERVAL">Check Interval (seconds) <span class="tooltip-icon" data-tooltip="How often to check service health in the background (min 10s)">ℹ️</span></label>
+                <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" required 
+                       value="{{ settings.get('HEALTH_CHECK_INTERVAL', '60') }}" min="10">
+            </div>
+            
+            <div class="form-group">
+                <label for="HEALTH_CHECK_TIMEOUT">Request Timeout (seconds) <span class="tooltip-icon" data-tooltip="Maximum time to wait for a service to respond">ℹ️</span></label>
+                <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" required 
+                       value="{{ settings.get('HEALTH_CHECK_TIMEOUT', '1') }}" min="1" max="30">
+            </div>
         </div>
 
         <h3>Notifications</h3>
-        
-        <div class="form-group">
-            <label for="NOTIFY_EVENTS_HEALTH">Health Alerts <span class="tooltip-icon" data-tooltip="Notify when services become unhealthy or recover">ℹ️</span></label>
-            <select id="NOTIFY_EVENTS_HEALTH" name="NOTIFY_EVENTS_HEALTH">
-                <option value="1" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '1' %}selected{% endif %}>Enabled</option>
-                <option value="0" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '0' %}selected{% endif %}>Disabled</option>
-            </select>
-        </div>
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="NOTIFY_EVENTS_HEALTH">Health Alerts <span class="tooltip-icon" data-tooltip="Notify when services become unhealthy or recover">ℹ️</span></label>
+                <select id="NOTIFY_EVENTS_HEALTH" name="NOTIFY_EVENTS_HEALTH">
+                    <option value="1" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '1' %}selected{% endif %}>Enabled</option>
+                    <option value="0" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '0' %}selected{% endif %}>Disabled</option>
+                </select>
+            </div>
 
-        <div class="form-group">
-            <label for="NOTIFY_EVENTS_SYSTEM">System Events <span class="tooltip-icon" data-tooltip="Notify about system events (e.g. startup, shutdown)">ℹ️</span></label>
-            <select id="NOTIFY_EVENTS_SYSTEM" name="NOTIFY_EVENTS_SYSTEM">
-                <option value="1" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '1' %}selected{% endif %}>Enabled</option>
-                <option value="0" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '0' %}selected{% endif %}>Disabled</option>
-            </select>
-        </div>
+            <div class="form-group">
+                <label for="NOTIFY_EVENTS_SYSTEM">System Events <span class="tooltip-icon" data-tooltip="Notify about system events (e.g. startup, shutdown)">ℹ️</span></label>
+                <select id="NOTIFY_EVENTS_SYSTEM" name="NOTIFY_EVENTS_SYSTEM">
+                    <option value="1" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '1' %}selected{% endif %}>Enabled</option>
+                    <option value="0" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '0' %}selected{% endif %}>Disabled</option>
+                </select>
+            </div>
 
-        <div class="form-group">
-            <label for="DISCORD_WEBHOOK_URL">Discord Webhook URL <span class="tooltip-icon" data-tooltip="Leave empty to disable notifications">ℹ️</span></label>
-            <input type="url" id="DISCORD_WEBHOOK_URL" name="DISCORD_WEBHOOK_URL" 
-                   value="{{ settings.get('DISCORD_WEBHOOK_URL', '') }}"
-                   placeholder="https://discord.com/api/webhooks/...">
-        </div>
-        <div class="form-group">
-            <button type="button" class="btn btn-secondary" onclick="testDiscordWebhook(event)">🔔 Test Notification</button>
+            <div class="form-group">
+                <label for="DISCORD_WEBHOOK_URL">Discord Webhook URL <span class="tooltip-icon" data-tooltip="Leave empty to disable notifications">ℹ️</span></label>
+                <input type="url" id="DISCORD_WEBHOOK_URL" name="DISCORD_WEBHOOK_URL" 
+                       value="{{ settings.get('DISCORD_WEBHOOK_URL', '') }}"
+                       placeholder="https://discord.com/api/webhooks/...">
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-secondary" onclick="testDiscordWebhook(event)">🔔 Test Notification</button>
+            </div>
         </div>
         </div>
 
         <!-- Tab: Infrastructure -->
         <div id="tab-infrastructure" class="tab-content" style="display: none;">
-        <h3>Cloudflare</h3>
-        
-        <div class="form-group">
-            <label for="CF_API_TOKEN">Cloudflare API Token <span class="tooltip-icon" data-tooltip="Token with Zone:DNS:Edit permissions">ℹ️</span></label>
-            <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
-                   value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
-        </div>
-        
-        <div class="form-group">
-            <label for="CF_ZONE_ID">Cloudflare Zone ID <span class="tooltip-icon" data-tooltip="The Zone ID for your domain from Cloudflare dashboard">ℹ️</span></label>
-            <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
-                   value="{{ settings.get('CF_ZONE_ID', '') }}">
-        </div>
-        
-        <div class="form-group">
-            <label for="DOMAIN_ROOT">Domain Root <span class="tooltip-icon" data-tooltip="Your main domain (e.g., example.com)">ℹ️</span></label>
-            <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
-                   value="{{ settings.get('DOMAIN_ROOT', '') }}"
-                   pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
-                   title="Please enter a valid domain name (e.g., example.com)"
-                   placeholder="example.com">
-        </div>
-        
-        <div class="form-group">
-            <label for="ORIGIN_RULE_NAME">Origin Rule Name <span class="tooltip-icon" data-tooltip="Name of the Cloudflare Origin Rule to manage">ℹ️</span></label>
-            <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
-                   value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
-                   placeholder="Service Rotation">
-        </div>
-        <div class="form-group">
-            <button type="button" class="btn btn-secondary" onclick="testCloudflareConnection(event)">☁️ Test Cloudflare Connection</button>
-        </div>
-        
+                <h3>Cloudflare</h3>
+                <div class="settings-grid-2-col">
+                    <div class="form-group">
+                        <label for="CF_API_TOKEN">Cloudflare API Token <span class="tooltip-icon" data-tooltip="Token with Zone:DNS:Edit permissions">ℹ️</span></label>
+                        <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                               value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="CF_ZONE_ID">Cloudflare Zone ID <span class="tooltip-icon" data-tooltip="The Zone ID for your domain from Cloudflare dashboard">ℹ️</span></label>
+                        <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                               value="{{ settings.get('CF_ZONE_ID', '') }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="DOMAIN_ROOT">Domain Root <span class="tooltip-icon" data-tooltip="Your main domain (e.g., example.com)">ℹ️</span></label>
+                        <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                               value="{{ settings.get('DOMAIN_ROOT', '') }}"
+                               pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
+                               title="Please enter a valid domain name (e.g., example.com)"
+                               placeholder="example.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ORIGIN_RULE_NAME">Origin Rule Name <span class="tooltip-icon" data-tooltip="Name of the Cloudflare Origin Rule to manage">ℹ️</span></label>
+                        <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                               value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
+                               placeholder="Service Rotation">
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn btn-secondary" onclick="testCloudflareConnection(event)">☁️ Test Cloudflare Connection</button>
+                    </div>
+                </div>        
         <h3>Traefik / Redis</h3>
-        
-        <div class="form-group">
-            <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
-            <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
-                   value="{{ settings.get('REDIS_HOST', '') }}"
-                   placeholder="127.0.0.1">
-        </div>
-        
-        <div class="form-group">
-            <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
-            <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
-                   value="{{ settings.get('REDIS_PORT', '6379') }}">
-        </div>
-        
-        <div class="form-group">
-            <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
-            <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
-                   value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
-        </div>
-        <div class="form-group">
-            <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
+                <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                       value="{{ settings.get('REDIS_HOST', '') }}"
+                       placeholder="127.0.0.1">
+            </div>
+            
+            <div class="form-group">
+                <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
+                <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                       value="{{ settings.get('REDIS_PORT', '6379') }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
+                <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                       value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
+            </div>
         </div>
         </div>
         
         <!-- Tab: Integrations -->
         <div id="tab-integrations" class="tab-content" style="display: none;">
-        <h3>Home Assistant</h3>
-        
-        <div class="form-group">
-            <label for="HASS_ENABLED">Enable Home Assistant Integration <span class="tooltip-icon" data-tooltip="Update Home Assistant entities with service status">ℹ️</span></label>
-            <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleHomeAssistantSettings()">
+        <div class="form-group heading-with-switch">
+            <h3 style="margin-bottom: 0;">Home Assistant</h3>
+            <div class="switch-75">
+                <label class="switch">
+                    <input type="checkbox" id="hass-toggle" {% if settings.get('HASS_ENABLED', '0') == '1' %}checked{% endif %}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleHomeAssistantSettings()" style="display: none;">
                 <option value="0" {% if settings.get('HASS_ENABLED', '0') == '0' %}selected{% endif %}>Disabled</option>
                 <option value="1" {% if settings.get('HASS_ENABLED', '0') == '1' %}selected{% endif %}>Enabled</option>
             </select>
         </div>
+        <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: -1rem; margin-bottom: 1.5rem;">
+            Update Home Assistant entities with service status 
+            <span class="tooltip-icon" data-tooltip="Update Home Assistant entities with service status">ℹ️</span>
+        </p>
         
         <div id="hass-settings" style="{% if settings.get('HASS_ENABLED', '1') == '0' %}display: none;{% else %}display: grid;{% endif %}">
             <div class="form-group">
@@ -338,11 +417,127 @@
         </div>
         </div>
         
+        <!-- Tab: System Info -->
+        <div id="tab-system" class="tab-content" style="display: none;">
+            <h3>System Information</h3>
+            <div class="system-grid">
+                <div class="system-card">
+                    <h4>Application</h4>
+                    <div class="stat-row">
+                        <span class="stat-label">Version</span>
+                        <span class="stat-value">{{ version }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Uptime</span>
+                        <span class="stat-value">{{ uptime }}</span>
+                    </div>
+                </div>
+
+                <div class="system-card">
+                    <h4>Database</h4>
+                    <div class="stat-row">
+                        <span class="stat-label">Size</span>
+                        <span class="stat-value">{{ db_size }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Services</span>
+                        <span class="stat-value">{{ db_stats.services }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Users</span>
+                        <span class="stat-value">{{ db_stats.users }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">API Keys</span>
+                        <span class="stat-value">{{ db_stats.api_keys }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Passkeys</span>
+                        <span class="stat-value">{{ db_stats.credentials }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">💾 Save Settings</button>
             <a href="/" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
+</div>
+
+<!-- API Endpoints Modal -->
+<div id="api-endpoints-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Available API Endpoints</h3>
+            <span class="modal-close" onclick="hideApiEndpointsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Use these endpoints with your API key in the <code>X-API-Key</code> header.</p>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/status</code></td>
+                        <td>Get overall system status</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/firewall-status</code></td>
+                        <td>Get firewall status</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/services/{id}/status</code></td>
+                        <td>Get status of a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/on</code></td>
+                        <td>Turn on a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/off</code></td>
+                        <td>Turn off a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/rotate</code></td>
+                        <td>Rotate URL for a service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-delete">DELETE</span></td>
+                        <td><code>/api/services/{id}</code></td>
+                        <td>Delete a service</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Confirm Deletion</h3>
+        <p>Are you sure you want to delete the API key "<strong id="delete-key-name"></strong>"?</p>
+        <p class="warning-text">This action cannot be undone.</p>
+        <div class="modal-buttons">
+            <button type="button" onclick="hideDeleteConfirm()" class="btn btn-secondary">Cancel</button>
+            <form id="delete-form" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -778,7 +973,80 @@ document.addEventListener('DOMContentLoaded', function() {
     if (darkModeToggle) {
         darkModeToggle.checked = document.documentElement.classList.contains('dark-mode');
     }
+
+    // Link HASS toggle to hidden select
+    const hassToggle = document.getElementById('hass-toggle');
+    if (hassToggle) {
+        const hassEnabledSelect = document.getElementById('HASS_ENABLED');
+        hassToggle.addEventListener('change', function() {
+            hassEnabledSelect.value = this.checked ? '1' : '0';
+            // Manually trigger change event on the select to run toggleHomeAssistantSettings()
+            hassEnabledSelect.dispatchEvent(new Event('change'));
+        });
+    }
 });
+
+function copyApiKey() {
+    const keyElement = document.getElementById('new-api-key');
+    const statusElement = document.getElementById('copy-status');
+    const text = keyElement.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        statusElement.textContent = '✓ Copied!';
+        statusElement.className = 'copy-status success';
+        setTimeout(() => {
+            statusElement.textContent = '';
+            statusElement.className = 'copy-status';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        statusElement.textContent = '✗ Failed to copy';
+        statusElement.className = 'copy-status error';
+    });
+}
+
+function showDeleteConfirm(keyId, keyName) {
+    const modal = document.getElementById('delete-modal');
+    const nameElement = document.getElementById('delete-key-name');
+    const form = document.getElementById('delete-form');
+    
+    nameElement.textContent = keyName;
+    form.action = `/api-keys/${keyId}/delete`;
+    modal.style.display = 'flex';
+}
+
+function hideDeleteConfirm() {
+    const modal = document.getElementById('delete-modal');
+    modal.style.display = 'none';
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideDeleteConfirm();
+        hideApiEndpointsModal();
+    }
+});
+
+// Close modal on outside click
+window.addEventListener('click', (e) => {
+    const deleteModal = document.getElementById('delete-modal');
+    if (e.target == deleteModal) {
+        hideDeleteConfirm();
+    }
+    const endpointsModal = document.getElementById('api-endpoints-modal');
+    if (e.target == endpointsModal) {
+        hideApiEndpointsModal();
+    }
+});
+
+function showApiEndpointsModal() {
+    document.getElementById('api-endpoints-modal').style.display = 'flex';
+}
+
+function hideApiEndpointsModal() {
+    document.getElementById('api-endpoints-modal').style.display = 'none';
+}
 </script>
 
 <style>
@@ -876,5 +1144,229 @@ document.addEventListener('DOMContentLoaded', function() {
     visibility: visible;
     opacity: 1;
 }
+
+.api-key-display {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.api-key-display code {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.copy-status {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.copy-status.success {
+    color: var(--success);
+}
+
+.copy-status.error {
+    color: var(--danger);
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.warning-text {
+    color: var(--warning);
+    background: rgba(234, 88, 12, 0.1);
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--warning);
+    margin-top: 1rem;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.section {
+    margin-bottom: 2rem;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.table th,
+.table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.table thead th {
+    font-weight: 600;
+    background: var(--bg-input);
+}
+
+.form-horizontal .form-group {
+    margin-bottom: 1rem;
+}
+
+.form-horizontal label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-horizontal input {
+    width: 100%;
+    max-width: 400px;
+}
+
+.system-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.system-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.system-card h4 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    color: var(--text-dim);
+}
+
+.stat-value {
+    font-weight: 600;
+    font-family: monospace;
+}
+
+.settings-grid-2-col {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.heading-with-switch {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+
+.heading-with-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* The h3 inside has margin-top, which provides spacing */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding-top: 1rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.5em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    color: #fff;
+}
+
+.badge-get {
+    background-color: var(--success);
+}
+
+.badge-post {
+    background-color: var(--primary);
+}
+
+.badge-delete {
+    background-color: var(--danger);
+}
 </style>
+
+
 {% endblock %}

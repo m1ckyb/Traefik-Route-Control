@@ -1,8 +1,8 @@
 services:
-  jellyfin-rotator:
+  traefik-route-control:
     build: .
-    image: jellyfin-rotator
-    container_name: jellyfin-rotator
+    image: traefik-route-control
+    container_name: traefik-route-control
     # Mount the .env file from the host to the container
     volumes:
       - ./data:/app/data
