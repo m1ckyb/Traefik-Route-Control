@@ -960,7 +960,14 @@ async function loadUnifiGroups(event) {
             body: JSON.stringify({host: host, user: user, password: pass})
         });
         
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('Server response:', text);
+            throw new Error(`Server returned invalid JSON (Status: ${response.status}). Check console for details.`);
+        }
         
         if (response.ok) {
             const updateSelect = (id, items, placeholder = 'Select a group...') => {
@@ -995,11 +1002,19 @@ async function loadUnifiGroups(event) {
 function syncFirewall() {
     if(confirm('Force sync UniFi firewall groups?')) {
         fetch('/api/sync-firewall', { method: 'POST' })
-            .then(response => response.json())
+            .then(async response => {
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error(`Invalid JSON (Status ${response.status})`);
+                }
+            })
             .then(data => {
                 if(data.error) showToast('Error: ' + data.error, 'error');
                 else showToast(data.message || 'Sync triggered. Check logs for details.', 'success');
-            });
+            })
+            .catch(err => showToast('Error: ' + err.message, 'error'));
     }
 }
 
