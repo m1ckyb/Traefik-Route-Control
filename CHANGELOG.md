@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - **Connection Testing**: Added "Test Connection" buttons for Redis, Home Assistant, Cloudflare, and Discord Webhooks.
 - **Tooltips**: Added informational tooltips to settings fields for better UX.
 - **Input Validation**: Added HTML5 validation for URLs, IP addresses, and Domain names.
+- **Service Management**: Added "Randomize Suffix" toggle to service configuration, allowing for static subdomains.
 
 #### Core Logic
 - **Service State Management**: Updated `turn_on_service` to ignore requests if the service is already online (preventing unnecessary rotation).
@@ -36,8 +37,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Database**: Added migrations for `password_hash`, `totp_secret`, and `recovery_codes` columns/tables.
+- **Database**: Added migration for `random_suffix` column in services table.
 - **Dependencies**: Added `pyotp` and `qrcode[pil]` to `requirements.txt`.
 - **Logging**: Password reset operations now log the temporary password to the container logs for security.
+- **UI/UX**: Improved layout of Settings page and standardized styling for inputs and notifications.
 
 ### Fixed
 - **UI Layout**: Fixed column spanning issues in the Settings form.

@@ -988,8 +988,8 @@ input:checked + .slider:before {
 }
 
 .toast {
-    min-width: 300px;
-    max-width: 400px;
+    width: 400px;
+    max-width: 90vw;
     padding: 1rem;
     border-radius: 0.5rem;
     background: var(--bg-card);
@@ -1030,6 +1030,9 @@ input:checked + .slider:before {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
 }
 
 .toast-close {
