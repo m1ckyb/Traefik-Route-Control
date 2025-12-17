@@ -421,3 +421,19 @@ def delete_api_key(key_id):
     with get_db() as conn:
         conn.execute("DELETE FROM api_keys WHERE id = ?", (key_id,))
         conn.commit()
+
+def get_db_stats():
+    """Get database statistics."""
+    stats = {}
+    with get_db() as conn:
+        stats['services'] = conn.execute("SELECT COUNT(*) FROM services").fetchone()[0]
+        stats['users'] = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        stats['credentials'] = conn.execute("SELECT COUNT(*) FROM webauthn_credentials").fetchone()[0]
+        stats['api_keys'] = conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0]
+        
+    if os.path.exists(DB_PATH):
+        stats['size_bytes'] = os.path.getsize(DB_PATH)
+    else:
+        stats['size_bytes'] = 0
+        
+    return stats

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}System Info - Traefik Route Control{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2>System Information</h2>
+    
+    <div class="system-grid">
+        <div class="system-card">
+            <h3>Application</h3>
+            <div class="stat-row">
+                <span class="stat-label">Version</span>
+                <span class="stat-value">{{ version }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Uptime</span>
+                <span class="stat-value">{{ uptime }}</span>
+            </div>
+        </div>
+
+        <div class="system-card">
+            <h3>Database</h3>
+            <div class="stat-row">
+                <span class="stat-label">Size</span>
+                <span class="stat-value">{{ db_size }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Services</span>
+                <span class="stat-value">{{ db_stats.services }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Users</span>
+                <span class="stat-value">{{ db_stats.users }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">API Keys</span>
+                <span class="stat-value">{{ db_stats.api_keys }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Passkeys</span>
+                <span class="stat-value">{{ db_stats.credentials }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.system-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.system-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.system-card h3 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    color: var(--text-dim);
+}
+
+.stat-value {
+    font-weight: 600;
+    font-family: monospace;
+}
+</style>
+{% endblock %}

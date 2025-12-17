@@ -8,6 +8,7 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 
 - **Multi-Service Management**: Control multiple services (Jellyfin, Sonarr, Radarr, etc.) from a single web interface
 - **Passkey Authentication**: Secure login with WebAuthn passkey support (biometric or PIN-based authentication)
+- **Two-Factor Authentication**: Optional TOTP-based 2FA with recovery codes for added security
 - **API Key Support**: Generate API keys for programmatic access via curl, scripts, or automation tools
 - **Service Diagnostics & Repair**: Comprehensive diagnostic tools to identify and fix configuration issues (DNS, Traefik, Cloudflare, firewall)
 - **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
@@ -18,6 +19,7 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 - **Traefik Dynamic Routing**: Uses Redis to inject routing rules into Traefik without restarting containers
 - **UniFi Firewall Control**: Automatically opens the specific Port Forwarding rule on your UDM Pro with dynamic port assignment
 - **Multi-Service Safety**: Checks if other services are using the port before closing the firewall
+- **Backup & Restore**: Easily export and import your configuration settings
 - **Persistent Storage**: All configuration stored in SQLite database with Docker volume support
 
 ## 🚀 Quick Start

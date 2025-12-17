@@ -19,7 +19,7 @@ import ipaddress
 import socket
 from functools import wraps
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from webauthn import (
@@ -2771,6 +2771,141 @@ def api_test_notification():
     send_discord_notification("🔔 **Test Notification**\nTraefik Route Control is connected to Discord!", title="System Info", webhook_url=webhook_url, msg_type='test')
     return jsonify({"success": True})
 
+@app.route('/api/settings/backup', methods=['GET'])
+@login_required
+def api_backup_settings():
+    """Download current settings as JSON."""
+    settings = db.get_all_settings()
+    json_str = json.dumps(settings, indent=2)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"traefik_control_backup_{timestamp}.json"
+    
+    response = make_response(json_str)
+    response.headers['Content-Type'] = 'application/json'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+@app.route('/api/settings/restore', methods=['POST'])
+@login_required
+def api_restore_settings():
+    """Restore settings from JSON file."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if file:
+        try:
+            data = json.load(file)
+            if not isinstance(data, dict):
+                 return jsonify({"error": "Invalid JSON format: expected a dictionary"}), 400
+            
+            count = 0
+            for key, value in data.items():
+                # Convert value to string as DB expects TEXT
+                db.set_setting(key, str(value))
+                count += 1
+            
+            return jsonify({"success": True, "message": f"Restored {count} settings successfully"})
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid JSON file"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/redis', methods=['POST'])
+@login_required
+def api_test_redis():
+    """Test Redis connection with provided credentials."""
+    data = request.get_json(silent=True) or {}
+    host = data.get('host')
+    port = data.get('port')
+    password = data.get('password')
+    
+    if not host or not port:
+        return jsonify({"error": "Host and Port are required"}), 400
+        
+    try:
+        r = redis.Redis(
+            host=host, 
+            port=int(port), 
+            password=password if password else None, 
+            socket_connect_timeout=5,
+            socket_timeout=5
+        )
+        if r.ping():
+            return jsonify({"success": True, "message": "Redis connection successful!"})
+        else:
+            return jsonify({"error": "Redis ping failed"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/test/hass', methods=['POST'])
+@login_required
+def api_test_hass():
+    """Test Home Assistant connection with provided credentials."""
+    data = request.get_json(silent=True) or {}
+    url = data.get('url')
+    token = data.get('token')
+    
+    if not url or not token:
+        return jsonify({"error": "URL and Token are required"}), 400
+        
+    try:
+        # Remove trailing slash if present
+        if url.endswith('/'):
+            url = url[:-1]
+            
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        # /api/ is a basic endpoint that returns {"message": "API running."}
+        response = requests.get(f"{url}/api/", headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            return jsonify({"success": True, "message": "Home Assistant connection successful!"})
+        else:
+            return jsonify({"error": f"Connection failed: HTTP {response.status_code}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/test/cloudflare', methods=['POST'])
+@login_required
+def api_test_cloudflare():
+    """Test Cloudflare connection with provided credentials."""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token')
+    zone_id = data.get('zone_id')
+    
+    if not token or not zone_id:
+        return jsonify({"error": "Token and Zone ID are required"}), 400
+        
+    try:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        # Verify token and zone access by fetching zone details
+        url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}"
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                zone_name = result.get('result', {}).get('name', 'Unknown')
+                return jsonify({"success": True, "message": f"Connection successful! Zone: {zone_name}"})
+            else:
+                errors = result.get('errors', [])
+                error_msg = errors[0].get('message') if errors else "Unknown Cloudflare error"
+                return jsonify({"error": f"Cloudflare Error: {error_msg}"}), 400
+        else:
+            return jsonify({"error": f"Connection failed: HTTP {response.status_code}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 # Legacy API endpoints for backward compatibility
 @app.route('/api/turn_on', methods=['POST'])
 @api_key_or_login_required
@@ -2843,6 +2978,48 @@ def delete_api_key_route(key_id):
     except Exception as e:
         flash(f'Error deleting API key: {str(e)}', 'error')
         return redirect(url_for('api_keys_page'))
+
+@app.route('/system', methods=['GET'])
+@login_required
+def system_page():
+    """Show system information page."""
+    version = get_version()
+    uptime_seconds = int(time.time() - STARTUP_TIME)
+    
+    # Format uptime
+    days, remainder = divmod(uptime_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+    
+    db_stats = db.get_db_stats()
+    
+    # Format DB size
+    size = db_stats.get('size_bytes', 0)
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            db_size_str = f"{size:.2f} {unit}"
+            break
+        size /= 1024
+    else:
+        db_size_str = f"{size:.2f} TB"
+        
+    return render_template('system.html', 
+                          version=version, 
+                          uptime=uptime_str, 
+                          db_stats=db_stats,
+                          db_size=db_size_str)
+
+@app.route('/api/system', methods=['GET'])
+@api_key_or_login_required
+def api_system_info():
+    """Get system information."""
+    uptime_seconds = int(time.time() - STARTUP_TIME)
+    return jsonify({
+        "version": get_version(),
+        "uptime_seconds": uptime_seconds,
+        "database": db.get_db_stats()
+    })
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Control Traefik Route Rotation")
