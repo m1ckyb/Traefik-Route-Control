@@ -192,10 +192,10 @@ function checkHealth(event) {
     fetch('/api/health/check', { method: 'POST' })
         .then(response => response.json())
         .then(data => {
-            if (data.error) alert('Error: ' + data.error);
+            if (data.error) showToast('Error: ' + data.error, 'error');
             else window.location.reload();
         })
-        .catch(err => alert('Request failed'))
+        .catch(err => showToast('Request failed', 'error'))
         .finally(() => {
             btn.textContent = originalText;
             btn.disabled = false;

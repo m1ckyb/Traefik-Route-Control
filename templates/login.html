@@ -97,6 +97,39 @@
         </div>
     </div>
     
+    <div id="toast-container"></div>
+    <script>
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        let icon = 'ℹ️';
+        if (type === 'success') icon = '✅';
+        if (type === 'error') icon = '❌';
+        if (type === 'warning') icon = '⚠️';
+        
+        toast.innerHTML = `
+            <div class="toast-content">
+                <span>${icon}</span>
+                <span>${message}</span>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+            <div class="toast-progress"></div>
+        `;
+        
+        container.prepend(toast);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            toast.classList.add('closing');
+            toast.addEventListener('animationend', () => {
+                if (toast.parentElement) toast.remove();
+            });
+        }, 5000);
+    }
+    </script>
+    
     <script>
         const isSetup = {{ 'true' if is_setup else 'false' }};
         let currentAuthMode = 'passkey';
@@ -155,7 +188,7 @@
             const username = document.getElementById('username').value.trim();
             
             if (!username) {
-                alert('Please enter a username');
+                showToast('Please enter a username', 'warning');
                 return;
             }
             
@@ -169,7 +202,7 @@
                 
                 if (!optionsResponse.ok) {
                     const error = await optionsResponse.json();
-                    alert('Error: ' + (error.error || 'Failed to start registration'));
+                    showToast('Error: ' + (error.error || 'Failed to start registration'), 'error');
                     return;
                 }
                 
@@ -207,16 +240,16 @@
                 
                 if (!verifyResponse.ok) {
                     const error = await verifyResponse.json();
-                    alert('Error: ' + (error.error || 'Registration failed'));
+                    showToast('Error: ' + (error.error || 'Registration failed'), 'error');
                     return;
                 }
                 
-                alert('Account created successfully! Redirecting...');
+                showToast('Account created successfully! Redirecting...', 'success');
                 window.location.href = '/';
                 
             } catch (error) {
                 console.error('Registration error:', error);
-                alert('Failed to register passkey: ' + error.message);
+                showToast('Failed to register passkey: ' + error.message, 'error');
             }
         }
         
@@ -225,7 +258,7 @@
             const username = document.getElementById('username').value.trim();
             
             if (!username) {
-                alert('Please enter a username');
+                showToast('Please enter a username', 'warning');
                 return;
             }
             
@@ -239,7 +272,7 @@
                 
                 if (!optionsResponse.ok) {
                     const error = await optionsResponse.json();
-                    alert('Error: ' + (error.error || 'Failed to start authentication'));
+                    showToast('Error: ' + (error.error || 'Failed to start authentication'), 'error');
                     return;
                 }
                 
@@ -284,7 +317,7 @@
                 
                 if (!verifyResponse.ok) {
                     const error = await verifyResponse.json();
-                    alert('Error: ' + (error.error || 'Authentication failed'));
+                    showToast('Error: ' + (error.error || 'Authentication failed'), 'error');
                     return;
                 }
                 
@@ -292,7 +325,7 @@
                 
             } catch (error) {
                 console.error('Authentication error:', error);
-                alert('Failed to authenticate: ' + error.message);
+                showToast('Failed to authenticate: ' + error.message, 'error');
             }
         }
         
@@ -302,7 +335,7 @@
             const password = document.getElementById('password').value;
             
             if (!username || !password) {
-                alert('Please enter username and password');
+                showToast('Please enter username and password', 'warning');
                 return;
             }
             
@@ -319,13 +352,13 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    alert(data.error || 'Authentication failed');
+                    showToast(data.error || 'Authentication failed', 'error');
                     return;
                 }
                 
                 if (data.success) {
                     if (data.setup_2fa) {
-                        alert("Login successful.\n\n⚠️ Security Advice: Please set up Two-Factor Authentication (2FA) in Settings.");
+                        showToast("Login successful. Please set up 2FA in Settings.", 'success');
                         window.location.href = '/settings';
                     } else {
                         window.location.href = '/';
@@ -336,7 +369,7 @@
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                alert('Failed to login: ' + error.message);
+                showToast('Failed to login: ' + error.message, 'error');
             }
         }
         
@@ -365,7 +398,7 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    alert(data.error || 'Verification failed');
+                    showToast(data.error || 'Verification failed', 'error');
                     return;
                 }
                 
@@ -374,7 +407,7 @@
                 }
             } catch (error) {
                 console.error('2FA error:', error);
-                alert('Failed to verify code');
+                showToast('Failed to verify code', 'error');
             }
         }
 
