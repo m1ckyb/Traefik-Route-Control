@@ -383,37 +383,23 @@
             
             <div class="form-group">
                 <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name <span class="tooltip-icon" data-tooltip="Name of the Port Forward rule to toggle">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <select id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" style="flex: 1;">
-                        <option value="{{ settings.get('UNIFI_RULE_NAME', '') }}" selected>
-                            {% if settings.get('UNIFI_RULE_NAME') %}{{ settings.get('UNIFI_RULE_NAME') }}{% else %}Select a rule...{% endif %}
-                        </option>
-                    </select>
-                    <button type="button" class="btn btn-secondary" onclick="loadUnifiGroups(event)" title="Load Rules from UniFi">🔄</button>
-                </div>
+                <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
+                       value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
+                       placeholder="External">
             </div>
 
             <div class="form-group">
                 <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group) <span class="tooltip-icon" data-tooltip="UniFi Address Group to sync active service IPs to">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <select id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" style="flex: 1;">
-                        <option value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}" selected>
-                            {% if settings.get('UNIFI_IP_GROUP_NAME') %}{{ settings.get('UNIFI_IP_GROUP_NAME') }}{% else %}Select a group...{% endif %}
-                        </option>
-                    </select>
-                    <button type="button" class="btn btn-secondary" onclick="loadUnifiGroups(event)" title="Load Groups from UniFi">🔄</button>
-                </div>
+                <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed IPs">
             </div>
 
             <div class="form-group">
                 <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group) <span class="tooltip-icon" data-tooltip="UniFi Port Group to sync active service ports to">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <select id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" style="flex: 1;">
-                        <option value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}" selected>
-                            {% if settings.get('UNIFI_PORT_GROUP_NAME') %}{{ settings.get('UNIFI_PORT_GROUP_NAME') }}{% else %}Select a group...{% endif %}
-                        </option>
-                    </select>
-                </div>
+                <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed Ports">
             </div>
 
             <div class="form-group">
@@ -935,67 +921,6 @@ function toggleFirewallSettings() {
         unifiSettings.style.display = 'grid';
     } else {
         unifiSettings.style.display = 'none';
-    }
-}
-
-async function loadUnifiGroups(event) {
-    const host = document.getElementById('UNIFI_HOST').value;
-    const user = document.getElementById('UNIFI_USER').value;
-    const pass = document.getElementById('UNIFI_PASS').value;
-    
-    if (!host || !user || !pass) {
-        showToast('Please enter UniFi Host, Username and Password first', 'warning');
-        return;
-    }
-
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '⌛';
-    btn.disabled = true;
-
-    try {
-        const response = await fetch('/api/unifi/groups', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({host: host, user: user, password: pass})
-        });
-        
-        const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('Server response:', text);
-            throw new Error(`Server returned invalid JSON (Status: ${response.status}). Check console for details.`);
-        }
-        
-        if (response.ok) {
-            const updateSelect = (id, items, placeholder = 'Select a group...') => {
-                const select = document.getElementById(id);
-                const current = select.value;
-                select.innerHTML = `<option value="">${placeholder}</option>`;
-                items.forEach(item => {
-                    const opt = document.createElement('option');
-                    opt.value = item.name;
-                    opt.textContent = item.name;
-                    if (item.name === current) opt.selected = true;
-                    select.appendChild(opt);
-                });
-            };
-
-            if (data.ip_groups) updateSelect('UNIFI_IP_GROUP_NAME', data.ip_groups);
-            if (data.port_groups) updateSelect('UNIFI_PORT_GROUP_NAME', data.port_groups);
-            if (data.rules) updateSelect('UNIFI_RULE_NAME', data.rules, 'Select a rule...');
-            
-            showToast('UniFi data loaded successfully', 'success');
-        } else {
-            showToast('Error loading groups: ' + (data.error || 'Unknown error'), 'error');
-        }
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
     }
 }
 
