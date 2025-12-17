@@ -413,6 +413,12 @@
                     <button type="button" class="btn btn-secondary" onclick="syncFirewall()">🔄 Sync Firewall Groups Now</button>
                 </div>
             </div>
+
+            <div class="form-group">
+                <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval (minutes) <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes. Set to 0 to disable.">ℹ️</span></label>
+                <input type="number" id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL" 
+                       value="{{ settings.get('PORT_ROTATION_INTERVAL', '0') }}" min="0">
+            </div>
         </div>
         </div>
         

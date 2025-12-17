@@ -1072,6 +1072,28 @@ def start_health_check_thread():
     thread = threading.Thread(target=health_check_loop, daemon=True)
     thread.start()
 
+def port_rotation_loop():
+    """Background loop to rotate firewall port periodically."""
+    print("🔹 Starting background port rotation service...")
+    while True:
+        try:
+            interval_mins = int(get_setting("PORT_ROTATION_INTERVAL", required=False) or 0)
+            if interval_mins > 0:
+                # Check if we have active services before rotating
+                services = db.get_all_services()
+                if any(s['enabled'] for s in services):
+                    rotate_firewall_port()
+                time.sleep(interval_mins * 60)
+            else:
+                time.sleep(60) # Check setting again in a minute
+        except Exception as e:
+            print(f"⚠️ Port rotation error: {e}")
+            time.sleep(60)
+
+def start_port_rotation_thread():
+    thread = threading.Thread(target=port_rotation_loop, daemon=True)
+    thread.start()
+
 def get_status():
     """Get overall system status"""
     r = get_redis()
@@ -1284,6 +1306,88 @@ def turn_off_service(service_id):
     
     print(f"✅ {service['name']} ACCESS DISABLED.\n")
     return {"message": f"{service['name']} disabled successfully"}
+
+def rotate_firewall_port():
+    """
+    Rotates the external firewall port for all active services without restarting them.
+    Updates UniFi Port Forward and Cloudflare Origin Rule.
+    """
+    print("\n🔄 === ROTATING FIREWALL PORT ===")
+    
+    # 1. Check for active services
+    services = db.get_all_services()
+    active_services = [s for s in services if s['enabled']]
+    
+    if not active_services:
+        print("   No active services. Skipping rotation.")
+        return {"error": "No active services"}
+
+    # 2. Generate new port
+    new_port = generate_random_port()
+    print(f"   New Port: {new_port}")
+
+    # 3. Update UniFi Firewall
+    unifi_session = None
+    unifi_base_url = None
+    unifi_host = get_setting("UNIFI_HOST", required=False)
+    unifi_user = get_setting("UNIFI_USER", required=False)
+    unifi_pass = get_setting("UNIFI_PASS", required=False)
+    
+    if all([unifi_host, unifi_user, unifi_pass]):
+        unifi_base_url = f"https://{unifi_host}"
+        unifi_session = requests.Session()
+        unifi_session.verify = False
+        resp = login_unifi_with_retry(unifi_session, unifi_base_url, unifi_user, unifi_pass)
+        if resp and resp.status_code == 200:
+            csrf_token = resp.headers.get("x-csrf-token")
+            if csrf_token:
+                unifi_session.headers.update({"X-CSRF-Token": csrf_token})
+    
+    if not toggle_unifi(True, new_port, session=unifi_session, base_url=unifi_base_url):
+        if unifi_session: logout_unifi(unifi_session, unifi_base_url)
+        return {"error": "Failed to update UniFi firewall"}
+
+    # 4. Update Cloudflare Origin Rule
+    origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+    ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
+    
+    if ruleset_data:
+        rules = ruleset_data.get('result', {}).get('rules', [])
+        target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
+        ruleset_id = ruleset_data.get('result', {}).get('id')
+
+        if target_rule:
+            # Keep existing expression, just update the port
+            update_data = {
+                "expression": target_rule['expression'],
+                "description": origin_rule_name,
+                "action": target_rule['action'],
+                "action_parameters": target_rule['action_parameters'],
+                "enabled": True
+            }
+            
+            # Update port in action parameters
+            if 'origin' not in update_data['action_parameters']:
+                update_data['action_parameters']['origin'] = {}
+            update_data['action_parameters']['origin']['port'] = new_port
+
+            cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
+            print(f"   Updated Origin Rule port to {new_port}")
+        else:
+            print("   ⚠️ Origin Rule not found, skipping Cloudflare update")
+    
+    # 5. Update Database
+    for service in active_services:
+        db.update_service_status(service['id'], True, service['current_hostname'], new_port)
+
+    # 6. Sync UniFi Groups (to ensure IP/Port groups are consistent, though port group might not change if it tracks internal ports)
+    sync_unifi_groups(session=unifi_session, base_url=unifi_base_url)
+
+    if unifi_session:
+        logout_unifi(unifi_session, unifi_base_url)
+        
+    print("✅ Firewall port rotated successfully.")
+    return {"success": True, "port": new_port}
 
 def turn_on_service(service_id, force=False):
     """Turn on a specific service"""
@@ -2803,6 +2907,15 @@ def api_sync_firewall():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/firewall/rotate', methods=['POST'])
+@api_key_or_login_required
+def api_rotate_firewall_port():
+    """Manually trigger a firewall port rotation."""
+    result = rotate_firewall_port()
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
 @app.route('/api/users/<username>/reset-password', methods=['POST'])
 @api_key_or_login_required
 def api_reset_password(username):
@@ -3080,6 +3193,7 @@ if __name__ == "__main__":
         cmd_on()
     elif args.action == "serve":
         start_health_check_thread()
+        start_port_rotation_thread()
         print(f"🚀 Starting Web UI on http://{API_HOST}:{API_PORT}")
         print(f"   Configure settings and services at http://{API_HOST}:{API_PORT}/settings")
         app.run(host=API_HOST, port=API_PORT, debug=False)

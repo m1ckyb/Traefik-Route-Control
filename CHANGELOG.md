@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - **Tooltips**: Added informational tooltips to settings fields for better UX.
 - **Input Validation**: Added HTML5 validation for URLs, IP addresses, and Domain names.
 - **Service Management**: Added "Randomize Suffix" toggle to service configuration, allowing for static subdomains.
+- **Port Rotation**: Added automated firewall port rotation (changing the external port periodically) without restarting services.
 
 #### Core Logic
 - **Service State Management**: Updated `turn_on_service` to ignore requests if the service is already online (preventing unnecessary rotation).
