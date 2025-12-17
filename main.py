@@ -1209,17 +1209,30 @@ def turn_off_service(service_id):
         print("   ⚠️ Other services are still active. Firewall will remain OPEN.")
 
     print("🔹 Cleaning up DNS records...")
-    records = cf_request("GET", f"dns_records?type=A&name_contains={subdomain_prefix}-")
-    if records:
-        count = 0
-        for record in records.get('result', []):
-            if should_delete_dns_record(record['name'], subdomain_prefix):
-                print(f"   Deleting: {record['name']}")
-                cf_request("DELETE", f"dns_records/{record['id']}")
-                count += 1
-        
-        if count == 0:
-            print("   No DNS records found to clean.")
+    if service.get('random_suffix', 1):
+        # Random mode: Clean up any records matching prefix- pattern
+        records = cf_request("GET", f"dns_records?type=A&name_contains={subdomain_prefix}-")
+        if records:
+            count = 0
+            for record in records.get('result', []):
+                if should_delete_dns_record(record['name'], subdomain_prefix):
+                    print(f"   Deleting: {record['name']}")
+                    cf_request("DELETE", f"dns_records/{record['id']}")
+                    count += 1
+            if count == 0:
+                print("   No DNS records found to clean.")
+    else:
+        # Static mode: Clean up the specific static record
+        domain_root = get_setting("DOMAIN_ROOT")
+        if domain_root:
+            full_hostname = f"{subdomain_prefix}.{domain_root}"
+            records = cf_request("GET", f"dns_records?type=A&name={full_hostname}")
+            if records and records.get('result'):
+                for record in records['result']:
+                    print(f"   Deleting: {record['name']}")
+                    cf_request("DELETE", f"dns_records/{record['id']}")
+            else:
+                print("   No DNS records found to clean.")
 
     print("🔹 Cleaning up Origin Rule...")
     origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
@@ -1344,8 +1357,12 @@ def turn_on_service(service_id, force=False):
     if not domain_root:
         return {"error": "DOMAIN_ROOT not configured"}
     
-    random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    new_subdomain = f"{service['subdomain_prefix']}-{random_part}"
+    if service.get('random_suffix', 1):
+        random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        new_subdomain = f"{service['subdomain_prefix']}-{random_part}"
+    else:
+        new_subdomain = service['subdomain_prefix']
+        
     full_hostname = f"{new_subdomain}.{domain_root}"
     public_ip = get_public_ip()
     
@@ -1354,9 +1371,21 @@ def turn_on_service(service_id, force=False):
     print(f"   Port:    {random_port}")
     print(f"   IP:      {public_ip}")
 
-    print("🔹 Creating DNS Record...")
+    print("🔹 Creating/Updating DNS Record...")
+    # Check if record exists first (important for static mode to avoid duplicates/errors)
+    existing_records = cf_request("GET", f"dns_records?type=A&name={full_hostname}")
     dns_data = {"type": "A", "name": new_subdomain, "content": public_ip, "ttl": 1, "proxied": True}
-    result = cf_request("POST", "dns_records", dns_data)
+    
+    if existing_records and existing_records.get('result'):
+        # Update existing record
+        record_id = existing_records['result'][0]['id']
+        print(f"   Updating existing DNS record: {full_hostname}")
+        result = cf_request("PUT", f"dns_records/{record_id}", dns_data)
+    else:
+        # Create new record
+        print(f"   Creating new DNS record: {full_hostname}")
+        result = cf_request("POST", "dns_records", dns_data)
+        
     if not result:
         return {"error": "Failed to create DNS record"}
 
@@ -1423,13 +1452,15 @@ def turn_on_service(service_id, force=False):
                 print(f"   ⚠️ Warning: Failed to create Origin Rule")
 
 
-    print("🔹 Cleaning old DNS for this service...")
-    records = cf_request("GET", f"dns_records?type=A&name_contains={service['subdomain_prefix']}-")
-    if records:
-        for record in records.get('result', []):
-            if should_delete_dns_record(record['name'], service['subdomain_prefix'], full_hostname):
-                print(f"   Deleting old DNS record: {record['name']}")
-                cf_request("DELETE", f"dns_records/{record['id']}")
+    # Only clean up old random records if we are in random mode
+    if service.get('random_suffix', 1):
+        print("🔹 Cleaning old DNS for this service...")
+        records = cf_request("GET", f"dns_records?type=A&name_contains={service['subdomain_prefix']}-")
+        if records:
+            for record in records.get('result', []):
+                if should_delete_dns_record(record['name'], service['subdomain_prefix'], full_hostname):
+                    print(f"   Deleting old DNS record: {record['name']}")
+                    cf_request("DELETE", f"dns_records/{record['id']}")
 
     print("🔹 Updating Traefik...")
     r = get_redis()
@@ -2254,13 +2285,15 @@ def onboarding_complete():
 def new_service():
     if request.method == 'POST':
         try:
+            random_suffix = 1 if request.form.get('random_suffix') else 0
             db.add_service(
                 name=request.form['name'],
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
                 subdomain_prefix=request.form['subdomain_prefix'],
-                hass_entity_id=request.form.get('hass_entity_id') or None
+                hass_entity_id=request.form.get('hass_entity_id') or None,
+                random_suffix=random_suffix
             )
             flash('Service added successfully!', 'success')
             return redirect(url_for('index'))
@@ -2279,6 +2312,7 @@ def edit_service(service_id):
     
     if request.method == 'POST':
         try:
+            random_suffix = 1 if request.form.get('random_suffix') else 0
             db.update_service(
                 service_id,
                 name=request.form['name'],
@@ -2286,7 +2320,8 @@ def edit_service(service_id):
                 service_name=request.form['service_name'],
                 target_url=request.form['target_url'],
                 subdomain_prefix=request.form['subdomain_prefix'],
-                hass_entity_id=request.form.get('hass_entity_id') or None
+                hass_entity_id=request.form.get('hass_entity_id') or None,
+                random_suffix=random_suffix
             )
             flash('Service updated successfully!', 'success')
             return redirect(url_for('index'))

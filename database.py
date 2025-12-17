@@ -21,6 +21,7 @@ def init_db():
                 target_url TEXT NOT NULL,
                 subdomain_prefix TEXT NOT NULL,
                 hass_entity_id TEXT,
+                random_suffix INTEGER DEFAULT 1,
                 enabled INTEGER DEFAULT 0,
                 current_hostname TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -154,6 +155,14 @@ def init_db():
                 """)
             conn.execute("INSERT INTO schema_version (version) VALUES (7)")
         
+        # Migration 8: Add random_suffix column to services table
+        if current_version < 8:
+            cursor = conn.execute("PRAGMA table_info(services)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'random_suffix' not in columns:
+                conn.execute("ALTER TABLE services ADD COLUMN random_suffix INTEGER DEFAULT 1")
+            conn.execute("INSERT INTO schema_version (version) VALUES (8)")
+        
         conn.commit()
 
 @contextmanager
@@ -187,25 +196,25 @@ def get_service_by_router_name(router_name):
         row = cursor.fetchone()
         return dict(row) if row else None
 
-def add_service(name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id=None):
+def add_service(name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id=None, random_suffix=1):
     """Add a new service."""
     with get_db() as conn:
         cursor = conn.execute("""
-            INSERT INTO services (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id))
+            INSERT INTO services (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id, random_suffix)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id, random_suffix))
         conn.commit()
         return cursor.lastrowid
 
-def update_service(service_id, name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id=None):
+def update_service(service_id, name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id=None, random_suffix=1):
     """Update an existing service."""
     with get_db() as conn:
         conn.execute("""
             UPDATE services 
             SET name = ?, router_name = ?, service_name = ?, target_url = ?, 
-                subdomain_prefix = ?, hass_entity_id = ?, updated_at = CURRENT_TIMESTAMP
+                subdomain_prefix = ?, hass_entity_id = ?, random_suffix = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id, service_id))
+        """, (name, router_name, service_name, target_url, subdomain_prefix, hass_entity_id, random_suffix, service_id))
         conn.commit()
 
 def delete_service(service_id):
