@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+#### Documentation
+- **Workflow Guidelines**: Updated `GEMINI.md` with explicit instructions for maintaining the changelog and workflow procedures.
+
 #### Authentication & Security
 - **Username/Password Login**: Added support for traditional password-based login alongside Passkeys.
 - **Two-Factor Authentication (2FA)**: Implemented TOTP-based 2FA with QR code setup.
@@ -37,6 +40,8 @@ All notable changes to this project will be documented in this file.
 - **Force Flag**: Added a `force` parameter to the API to bypass state checks when needed.
 
 ### Changed
+- **UI/UX**: Standardized button sizes across the application for a more consistent interface.
+- **UI/UX**: Unified service control notifications to use the same toast style as the settings page.
 - **Database**: Added migrations for `password_hash`, `totp_secret`, and `recovery_codes` columns/tables.
 - **Database**: Added migration for `random_suffix` column in services table.
 - **Dependencies**: Added `pyotp` and `qrcode[pil]` to `requirements.txt`.

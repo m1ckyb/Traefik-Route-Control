@@ -71,7 +71,29 @@
 - Ensure sensitive data (passwords, tokens) is handled securely.
 
 ## Context for Gemini
+
 When working on this project, assume the user wants robust, production-ready code. Pay attention to:
+
 - **Error handling**: External APIs (Cloudflare, UniFi) can fail.
+
 - **User Experience**: The UI should be responsive and provide feedback (toasts/alerts).
+
 - **Security**: This app controls firewall rules, so security is paramount.
+
+
+
+## Workflow & Changelog
+
+**CRITICAL**: Every time you make a change to the codebase that affects functionality, user experience, or configuration (features, bug fixes, refactoring, style updates), you **MUST** update `CHANGELOG.md`.
+
+
+
+- **Format**: Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) convention.
+
+- **Location**: Add new entries under the `## [Unreleased]` section.
+
+- **Categories**: Use sub-headers like `### Added`, `### Changed`, `### Fixed`, `### Removed`.
+
+- **Content**: Be concise but descriptive. Explain *what* changed and *why* (if not obvious).
+
+- **Process**: Perform the `CHANGELOG.md` update in the same turn/commit as the code changes.
