@@ -1397,10 +1397,18 @@ def turn_on_service(service_id, force=False):
     
     if service.get('enabled') and not force:
         print(f"ℹ️ {service['name']} is already online. Ignoring request.")
+        
+        domain_root = get_setting("DOMAIN_ROOT")
+        regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
+        if domain_root:
+            regex_pattern += domain_root.replace('.', '\\.')
+        regex_pattern += ".*$"
+        
         return {
             "message": f"{service['name']} is already online",
             "url": f"https://{service.get('current_hostname')}",
-            "port": service.get('current_port')
+            "port": service.get('current_port'),
+            "regex": regex_pattern
         }
     
     print(f"\n🚀 === ENABLING {service['name']} ===")
@@ -1611,12 +1619,19 @@ def turn_on_service(service_id, force=False):
         print(f"⚠️ Port verification failed: {error_msg}")
         port_status = "unverified"
 
+    # Generate regex pattern for UI
+    regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
+    if domain_root:
+        regex_pattern += domain_root.replace('.', '\\.')
+    regex_pattern += ".*$"
+
     print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname} (Port: {random_port})\n")
     return {
         "message": f"{service['name']} enabled successfully", 
         "url": f"https://{full_hostname}", 
         "port": random_port,
-        "port_status": port_status
+        "port_status": port_status,
+        "regex": regex_pattern
     }
 
 def rotate_service(service_id):

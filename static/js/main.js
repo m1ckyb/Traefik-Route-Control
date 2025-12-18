@@ -1,4 +1,43 @@
 // Service control functions
+function updateServiceCard(card, data, enabled) {
+    // Update Badge
+    const badge = card.querySelector('.status-badge');
+    badge.className = 'status-badge'; // Reset classes
+    if (enabled) {
+        badge.classList.add('status-online');
+        badge.textContent = 'ONLINE';
+    } else {
+        badge.classList.add('status-offline');
+        badge.textContent = 'OFFLINE';
+    }
+
+    // Update URL Row
+    const urlRow = card.querySelector('.current-url-row');
+    const urlLink = card.querySelector('.url-link');
+    if (enabled && data.url) {
+        urlLink.href = data.url;
+        urlLink.textContent = data.url;
+        urlRow.style.display = 'flex';
+    } else {
+        urlRow.style.display = 'none';
+    }
+
+    // Update Regex Row
+    const regexRow = card.querySelector('.regex-row');
+    const regexCode = card.querySelector('.regex-pattern');
+    if (enabled && data.regex) {
+        regexCode.dataset.regex = data.regex;
+        regexCode.textContent = data.regex;
+        regexRow.style.display = 'flex';
+    } else {
+        regexRow.style.display = 'none';
+    }
+
+    // Update Actions
+    const actions = card.querySelector('.service-actions');
+    actions.style.display = enabled ? 'flex' : 'none';
+}
+
 async function toggleService(serviceId, enable, event) {
     const action = enable ? 'on' : 'off';
     
@@ -18,27 +57,32 @@ async function toggleService(serviceId, enable, event) {
         
         if (response.ok) {
             showToast(data.message, 'success');
-            setTimeout(() => window.location.reload(), 1000);
+            updateServiceCard(serviceCard, data, enable);
+            switchInput.disabled = false;
         } else {
             showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             // Revert the switch state on failure
             switchInput.checked = !enable;
             switchInput.disabled = false;
-            serviceCard.classList.remove('loading-state');
         }
     } catch (error) {
         showToast('Error: ' + error.message, 'error');
         // Revert the switch state on failure
         switchInput.checked = !enable;
         switchInput.disabled = false;
+    } finally {
         serviceCard.classList.remove('loading-state');
     }
 }
 
 async function rotateService(serviceId, event) {
     const btn = event.target;
+    const originalText = btn.textContent; // Save original text
     btn.disabled = true;
     btn.textContent = '⏳ Rotating...';
+    
+    // Find service card
+    const serviceCard = btn.closest('.service-card');
     
     try {
         const response = await fetch(`/api/services/${serviceId}/rotate`, {
@@ -49,17 +93,15 @@ async function rotateService(serviceId, event) {
         
         if (response.ok) {
             showToast(data.message, 'success');
-            // Reload after a short delay to show the toast
-            setTimeout(() => window.location.reload(), 1000);
+            updateServiceCard(serviceCard, data, true);
         } else {
             showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
-            btn.disabled = false;
-            btn.textContent = '🔄 Rotate URL';
         }
     } catch (error) {
         showToast('Error: ' + error.message, 'error');
+    } finally {
         btn.disabled = false;
-        btn.textContent = '🔄 Rotate URL';
+        btn.textContent = originalText;
     }
 }
 

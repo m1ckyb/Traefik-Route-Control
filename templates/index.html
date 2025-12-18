@@ -64,29 +64,29 @@
             <div class="info-row">
                 <strong>Prefix:</strong> <code>{{ service.subdomain_prefix }}</code>
             </div>
-            {% if service.enabled and service.current_hostname %}
-            <div class="info-row">
+            <div class="info-row current-url-row" style="display: {% if service.enabled and service.current_hostname %}flex{% else %}none{% endif %}">
                 <strong>Current URL:</strong> 
-                <a href="https://{{ service.current_hostname }}" target="_blank" class="url-link">
-                    https://{{ service.current_hostname }}
+                <a href="{% if service.current_hostname %}https://{{ service.current_hostname }}{% else %}#{% endif %}" target="_blank" class="url-link">
+                    {% if service.current_hostname %}https://{{ service.current_hostname }}{% endif %}
                 </a>
             </div>
-            <div class="info-row">
+            <div class="info-row regex-row" style="display: {% if service.enabled and service.current_hostname %}flex{% else %}none{% endif %}">
                 <strong>Regex Pattern:</strong>
-                <code class="regex-pattern" data-regex="^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$" title="Click to copy"></code>
+                <code class="regex-pattern" 
+                      data-regex="{% if service.current_hostname %}^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*${% endif %}" 
+                      title="Click to copy">
+                    {% if service.current_hostname %}^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*${% endif %}
+                </code>
             </div>
-            {% endif %}
         </div>
         
-        <div class="service-actions">
-            {% if service.enabled %}
+        <div class="service-actions" style="display: {% if service.enabled %}flex{% else %}none{% endif %}">
             <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
                 🔄 Rotate URL
             </button>
             <button class="btn btn-info" onclick="diagnoseService({{ service.id }}, event)">
                 🔍 Diagnose
             </button>
-            {% endif %}
         </div>
     </div>
     {% endfor %}

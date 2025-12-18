@@ -40,8 +40,11 @@ All notable changes to this project will be documented in this file.
 - **Force Flag**: Added a `force` parameter to the API to bypass state checks when needed.
 
 ### Changed
+- **UI/UX**: Reduced button height/padding on the main dashboard for a more compact look.
+- **UI/UX**: Eliminated page refresh when toggling or rotating services; UI now updates dynamically.
 - **UI/UX**: Standardized button sizes across the application for a more consistent interface.
 - **UI/UX**: Unified service control notifications to use the same toast style as the settings page.
+- **API**: Updated `turn_on_service` response to include the generated regex pattern.
 - **Database**: Added migrations for `password_hash`, `totp_secret`, and `recovery_codes` columns/tables.
 - **Database**: Added migration for `random_suffix` column in services table.
 - **Dependencies**: Added `pyotp` and `qrcode[pil]` to `requirements.txt`.
@@ -51,6 +54,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **UI Layout**: Fixed column spanning issues in the Settings form.
 - **Validation**: Improved validation logic for Home Assistant entity IDs.
+- **UI/UX**: Fixed toast notifications disappearing too quickly by removing page reload on service toggle.
 
 ## [0.1.0] - Initial Release
 - Basic Traefik route rotation.
