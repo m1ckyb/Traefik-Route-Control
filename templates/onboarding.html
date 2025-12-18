@@ -30,6 +30,7 @@
         </div>
         
         <form id="onboarding-form" method="POST" action="/onboarding/complete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <!-- Step 1: Cloudflare Settings -->
             <div class="onboarding-step" data-step="1" style="display: block;">
                 <div class="restore-section">

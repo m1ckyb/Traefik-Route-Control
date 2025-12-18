@@ -116,11 +116,12 @@
         toast.innerHTML = `
             <div class="toast-content">
                 <span>${icon}</span>
-                <span>${message}</span>
+                <span class="toast-message"></span>
             </div>
             <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
             <div class="toast-progress"></div>
         `;
+        toast.querySelector('.toast-message').textContent = message;
         
         container.prepend(toast);
         

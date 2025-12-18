@@ -7,6 +7,7 @@
     <h2>Settings</h2>
     
     <form method="POST" class="settings-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="settings-tabs">
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-general')">General</button>
             <button type="button" class="tab-btn active" onclick="openTab(event, 'tab-security')">Security</button>
@@ -164,6 +165,7 @@
             <div class="section">
                 <h4>Create New API Key</h4>
                 <form method="POST" action="/api-keys/create" class="form-horizontal">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="form-group">
                         <label for="name">Key Name:</label>
                         <input type="text" id="name" name="name" placeholder="e.g., Home Automation Script" required>
@@ -540,8 +542,8 @@
         <div class="modal-buttons">
             <button type="button" onclick="hideDeleteConfirm()" class="btn btn-secondary">Cancel</button>
             <form id="delete-form" method="POST" style="display: inline;">
-                <button type="submit" class="btn btn-danger">Delete</button>
-            </form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <p>Are you sure you want to delete the API key <strong id="delete-key-name"></strong>?</p>
         </div>
     </div>
 </div>

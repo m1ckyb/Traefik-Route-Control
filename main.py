@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
 from webauthn import (
     generate_registration_options,
     verify_registration_response,
@@ -1666,6 +1667,28 @@ def cmd_on():
 # ================= API / MAIN =================
 app = Flask(__name__)
 
+# CSRF Protection
+app.config['WTF_CSRF_CHECK_DEFAULT'] = False # We will manually check to exempt API keys
+csrf = CSRFProtect(app)
+
+@app.before_request
+def check_csrf_protection():
+    """Enforce CSRF protection globally, but exempt API key requests."""
+    if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
+        # If API Key is present and valid-looking (we don't validate it fully here, 
+        # just check presence to skip CSRF, auth decorator handles the rest), skip CSRF.
+        # However, to be safe, we only skip if the header is present.
+        # If an attacker forces a browser to send X-API-Key, they can bypass CSRF?
+        # Browsers cannot send custom headers in cross-origin requests without CORS preflight.
+        # So this is safe.
+        if request.headers.get('X-API-Key'):
+            return
+        
+        # Also exempt specific setup routes if needed, but they are browser based so should have CSRF.
+        
+        # Enforce CSRF
+        csrf.protect()
+
 # Use persistent secret key from environment or generate one and store it
 SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
 if os.path.exists(SECRET_KEY_FILE):
@@ -2404,12 +2427,16 @@ def onboarding_complete():
 def new_service():
     if request.method == 'POST':
         try:
+            target_url = request.form['target_url']
+            if not target_url.startswith(('http://', 'https://')):
+                raise ValueError("Target URL must start with http:// or https://")
+                
             random_suffix = 1 if request.form.get('random_suffix') else 0
             db.add_service(
                 name=request.form['name'],
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
-                target_url=request.form['target_url'],
+                target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
                 hass_entity_id=request.form.get('hass_entity_id') or None,
                 random_suffix=random_suffix
@@ -2431,13 +2458,17 @@ def edit_service(service_id):
     
     if request.method == 'POST':
         try:
+            target_url = request.form['target_url']
+            if not target_url.startswith(('http://', 'https://')):
+                raise ValueError("Target URL must start with http:// or https://")
+
             random_suffix = 1 if request.form.get('random_suffix') else 0
             db.update_service(
                 service_id,
                 name=request.form['name'],
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
-                target_url=request.form['target_url'],
+                target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
                 hass_entity_id=request.form.get('hass_entity_id') or None,
                 random_suffix=random_suffix

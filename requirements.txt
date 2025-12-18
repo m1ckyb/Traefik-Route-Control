@@ -4,6 +4,7 @@ python-dotenv
 Flask
 gunicorn
 Flask-Login
+Flask-WTF
 webauthn
 pyotp
 qrcode[pil]

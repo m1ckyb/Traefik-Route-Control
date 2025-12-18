@@ -7,6 +7,7 @@
     <h2>{% if service %}Edit Service{% else %}Add New Service{% endif %}</h2>
     
     <form method="POST" class="service-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="form-group">
             <label for="name">Service Name</label>
             <input type="text" id="name" name="name" required 
