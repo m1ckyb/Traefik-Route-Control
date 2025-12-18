@@ -17,17 +17,17 @@ async function toggleService(serviceId, enable, event) {
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             // Revert the switch state on failure
             switchInput.checked = !enable;
             switchInput.disabled = false;
             serviceCard.classList.remove('loading-state');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
         // Revert the switch state on failure
         switchInput.checked = !enable;
         switchInput.disabled = false;
@@ -48,16 +48,16 @@ async function rotateService(serviceId, event) {
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             // Reload after a short delay to show the toast
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             btn.disabled = false;
             btn.textContent = '🔄 Rotate URL';
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = '🔄 Rotate URL';
     }
@@ -75,14 +75,14 @@ async function deleteService(serviceId, serviceName) {
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             // Reload after a short delay to show the toast
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
@@ -102,13 +102,13 @@ async function diagnoseService(serviceId, event) {
         if (response.ok) {
             showDiagnosticsModal(data);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
         
         btn.disabled = false;
         btn.textContent = originalText;
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = originalText;
     }
@@ -123,17 +123,17 @@ async function repairService(serviceId) {
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             // Close modal and reload after a short delay
             setTimeout(() => {
                 closeDiagnosticsModal();
                 window.location.reload();
             }, 1500);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
@@ -245,26 +245,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Show temporary notification
-function showNotification(message, type = 'success') {
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type}`;
-    notification.textContent = message;
-    notification.style.position = 'fixed';
-    notification.style.top = '20px';
-    notification.style.right = '20px';
-    notification.style.zIndex = '10000';
-    notification.style.minWidth = '250px';
-    notification.style.animation = 'slideIn 0.3s ease-out';
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
 // Home Assistant Modal functions
 function showHassModal(serviceId, serviceName) {
     // Sanitize service name for YAML - remove special characters and normalize spaces
@@ -320,9 +300,9 @@ function copyToClipboard(text, successMessage) {
     // Modern clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
-            showNotification(successMessage, 'success');
+            showToast(successMessage, 'success');
         }).catch(err => {
-            showNotification('Failed to copy: ' + err, 'error');
+            showToast('Failed to copy: ' + err, 'error');
         });
     } else {
         // Fallback for older browsers or non-HTTPS contexts
@@ -335,9 +315,9 @@ function copyToClipboard(text, successMessage) {
         
         try {
             document.execCommand('copy');
-            showNotification(successMessage, 'success');
+            showToast(successMessage, 'success');
         } catch (err) {
-            showNotification('Failed to copy: ' + err, 'error');
+            showToast('Failed to copy: ' + err, 'error');
         } finally {
             document.body.removeChild(textArea);
         }
