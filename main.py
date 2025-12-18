@@ -392,16 +392,16 @@ def update_hass(state, service_name="Service", hass_entity_id=None):
     hass_url = get_setting("HASS_URL", required=False)
     hass_token = get_setting("HASS_TOKEN", required=False)
     
-    # Use provided entity ID or fall back to global setting (for backward compatibility)
+    # Check if entity ID is provided for this service
     if not hass_entity_id:
-        hass_entity_id = get_setting("HASS_ENTITY_ID", required=False)
+        return # Skip if no entity ID provided
     
     # Strip whitespace - if result is empty/None, skip HA update
     hass_entity_id = hass_entity_id.strip() if hass_entity_id else None
 
     # Explicitly check for "None" or "null" strings
     if hass_entity_id and hass_entity_id.lower() in ["none", "null"]:
-        hass_entity_id = None
+        return
 
     # Validate entity ID format before sending request
     if hass_entity_id and '.' not in hass_entity_id:
@@ -3182,6 +3182,17 @@ def api_system_info():
         "uptime_seconds": uptime_seconds,
         "database": db.get_db_stats()
     })
+
+# Start background threads if running via Gunicorn/WSGI (imported module)
+if __name__ != "__main__":
+    try:
+        # Start background services when running under Gunicorn
+        # NOTE: This assumes a single worker process (default). 
+        # Multiple workers would duplicate health checks and notifications.
+        start_health_check_thread()
+        start_port_rotation_thread()
+    except Exception as e:
+        print(f"⚠️ Failed to start background tasks: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Control Traefik Route Rotation")

@@ -62,7 +62,7 @@
                 <strong>Target:</strong> <code>{{ service.target_url }}</code>
             </div>
             <div class="info-row">
-                <strong>Prefix:</strong> <code>{{ service.subdomain_prefix }}</code>
+                <strong>{% if service.random_suffix %}Prefix{% else %}Hostname{% endif %}:</strong> <code>{{ service.subdomain_prefix }}</code>
             </div>
             <div class="info-row current-url-row" style="display: {% if service.enabled and service.current_hostname %}flex{% else %}none{% endif %}">
                 <strong>Current URL:</strong> 

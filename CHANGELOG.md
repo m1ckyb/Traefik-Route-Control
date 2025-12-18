@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - **Force Flag**: Added a `force` parameter to the API to bypass state checks when needed.
 
 ### Changed
+- **UI/UX**: "Subdomain Prefix" label now dynamically changes to "Subdomain Hostname" in the service form and dashboard when Randomize Suffix is disabled, to better reflect the behavior.
 - **UI/UX**: Reduced button height/padding on the main dashboard for a more compact look.
 - **UI/UX**: Eliminated page refresh when toggling or rotating services; UI now updates dynamically.
 - **UI/UX**: Standardized button sizes across the application for a more consistent interface.
@@ -52,6 +53,8 @@ All notable changes to this project will be documented in this file.
 - **UI/UX**: Improved layout of Settings page and standardized styling for inputs and notifications.
 
 ### Fixed
+- **Home Assistant Integration**: Removed misleading "global setting" references and updated service-specific Entity ID helper text. Home Assistant updates are now strictly per-service.
+- **Background Tasks**: Fixed an issue where Health Check and Port Rotation threads were not starting when running the application with Gunicorn (Docker default).
 - **UI Layout**: Fixed column spanning issues in the Settings form.
 - **Validation**: Improved validation logic for Home Assistant entity IDs.
 - **UI/UX**: Fixed toast notifications disappearing too quickly by removing page reload on service toggle.
