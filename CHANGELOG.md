@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - **Force Flag**: Added a `force` parameter to the API to bypass state checks when needed.
 
 ### Changed
+- **UI/UX**: Unified notification system to use toast messages for all server feedback, removing redundant/static alert banners from the dashboard and login pages.
 - **UI/UX**: "Subdomain Prefix" label now dynamically changes to "Subdomain Hostname" in the service form and dashboard when Randomize Suffix is disabled, to better reflect the behavior.
 - **UI/UX**: Reduced button height/padding on the main dashboard for a more compact look.
 - **UI/UX**: Eliminated page refresh when toggling or rotating services; UI now updates dynamically.
