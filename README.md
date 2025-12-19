@@ -11,13 +11,14 @@ It integrates directly with Cloudflare, UniFi UDM Pro, Traefik (Redis), and Home
 - **Two-Factor Authentication**: Optional TOTP-based 2FA with recovery codes for added security
 - **API Key Support**: Generate API keys for programmatic access via curl, scripts, or automation tools
 - **Service Diagnostics & Repair**: Comprehensive diagnostic tools to identify and fix configuration issues (DNS, Traefik, Cloudflare, firewall)
-- **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control
+- **Per-Service Home Assistant Integration**: Each service can have its own Home Assistant entity ID for granular control, with a customizable API URL
 - **Web UI Configuration**: Configure all settings and services through an intuitive web interface - no .env files needed
 - **Rotating Subdomains**: Generates a random URL (e.g., https://jf-k92m1x0p.domain.com) every time you enable a service
 - **Random Port Generation**: Automatically generates a unique random port (1024-65535) for each service activation, avoiding known assigned ports for enhanced security
 - **Cloudflare Integration**: Automatically creates DNS records and updates Origin Rules (Port Rewrites)
 - **Traefik Dynamic Routing**: Uses Redis to inject routing rules into Traefik without restarting containers
 - **UniFi Firewall Control**: Automatically opens the specific Port Forwarding rule on your UDM Pro with dynamic port assignment
+- **Manual Port Rotation**: Instantly rotate the firewall port for all services with a single button click
 - **Multi-Service Safety**: Checks if other services are using the port before closing the firewall
 - **Backup & Restore**: Easily export and import your configuration settings
 - **Persistent Storage**: All configuration stored in SQLite database with Docker volume support

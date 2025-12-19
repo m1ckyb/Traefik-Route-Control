@@ -1,6 +1,6 @@
 services:
   traefik-route-control:
-    image: ghcr.io/m1ckyb/traefik-route-control:0.0.10
+    image: ghcr.io/m1ckyb/traefik-route-control:0.0.11
     # Volume for persistent database storage
     volumes:
       - ./data:/app/data
