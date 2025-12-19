@@ -67,6 +67,11 @@ async function toggleService(serviceId, enable, event) {
             showToast(data.message, 'success');
             updateServiceCard(serviceCard, data, enable);
             switchInput.disabled = false;
+            
+            // Refresh firewall status in the UI (enables/disables buttons)
+            if (window.refreshFirewallStatus) {
+                window.refreshFirewallStatus();
+            }
         } else {
             showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
             // Revert the switch state on failure

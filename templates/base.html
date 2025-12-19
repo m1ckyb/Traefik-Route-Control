@@ -146,9 +146,11 @@
     </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-    // Load firewall status in navbar if element exists
-    const navFirewallStatus = document.getElementById('nav-firewall-status');
-    if (navFirewallStatus) {
+    // Global function to refresh firewall status in the UI
+    window.refreshFirewallStatus = function() {
+        const navFirewallStatus = document.getElementById('nav-firewall-status');
+        if (!navFirewallStatus) return;
+
         fetch('/api/firewall-status')
             .then(r => r.json())
             .then(data => {
@@ -186,7 +188,10 @@
                 navFirewallStatus.innerHTML = 'ERROR';
                 navFirewallStatus.className = 'status-badge status-unknown';
             });
-    }
+    };
+
+    // Load firewall status on initial load
+    document.addEventListener('DOMContentLoaded', refreshFirewallStatus);
     </script>
 </body>
 </html>
