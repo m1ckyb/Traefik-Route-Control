@@ -164,6 +164,23 @@
                 
                 navFirewallStatus.innerHTML = statusText;
                 navFirewallStatus.className = statusClass;
+
+                // Disable/Enable dashboard buttons if they exist
+                const checkHealthBtn = document.getElementById('check-health-btn');
+                const rotatePortBtn = document.getElementById('rotate-port-btn');
+                if (checkHealthBtn && rotatePortBtn) {
+                    if (data.status === 'CLOSED') {
+                        checkHealthBtn.disabled = true;
+                        checkHealthBtn.title = 'Firewall is closed';
+                        rotatePortBtn.disabled = true;
+                        rotatePortBtn.title = 'Firewall is closed';
+                    } else {
+                        checkHealthBtn.disabled = false;
+                        checkHealthBtn.title = '';
+                        rotatePortBtn.disabled = false;
+                        rotatePortBtn.title = '';
+                    }
+                }
             })
             .catch(err => {
                 navFirewallStatus.innerHTML = 'ERROR';

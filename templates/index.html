@@ -4,7 +4,8 @@
 <div class="header-row">
     <h2>Services</h2>
     <div class="header-actions">
-        <button onclick="checkHealth(event)" class="btn btn-secondary">Check Health</button>
+        <button id="check-health-btn" onclick="checkHealth(event)" class="btn btn-secondary" {% if not firewall_enabled %}disabled title="Firewall is closed"{% endif %}>Check Health</button>
+        <button id="rotate-port-btn" onclick="rotateAllPorts(event)" class="btn btn-warning" {% if not firewall_enabled %}disabled title="Firewall is closed"{% endif %}>Rotate Port</button>
         <button onclick="showLogs()" class="btn btn-info">Logs</button>
         <button id="global-toggle-btn" class="btn btn-secondary" style="display: none;">Global Power</button>
         <a href="/services/new" class="btn btn-primary">+ Add Service</a>
@@ -215,6 +216,36 @@ function checkHealth(event) {
         .then(data => {
             if (data.error) showToast('Error: ' + data.error, 'error');
             else window.location.reload();
+        })
+        .catch(err => showToast('Request failed', 'error'))
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+}
+
+function rotateAllPorts(event) {
+    if (!confirm('Are you sure you want to rotate the firewall port for all services?')) return;
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Rotating...';
+    btn.disabled = true;
+    
+    fetch('/api/firewall/rotate', { 
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) showToast('Error: ' + data.error, 'error');
+            else {
+                showToast(data.message || 'Port rotated successfully', 'success');
+                // Reload to show the new port in status if applicable
+                setTimeout(() => window.location.reload(), 1000);
+            }
         })
         .catch(err => showToast('Request failed', 'error'))
         .finally(() => {

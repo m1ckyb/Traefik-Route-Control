@@ -418,9 +418,19 @@
             </div>
 
             <div class="form-group">
-                <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval (minutes) <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes. Set to 0 to disable.">ℹ️</span></label>
-                <input type="number" id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL" 
-                       value="{{ settings.get('PORT_ROTATION_INTERVAL', '0') }}" min="0">
+                <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes.">ℹ️</span></label>
+                <select id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL">
+                    <option value="0" {% if settings.get('PORT_ROTATION_INTERVAL', '0') == '0' %}selected{% endif %}>Disabled</option>
+                    {% for i in range(30, 510, 30) %}
+                    <option value="{{ i }}" {% if settings.get('PORT_ROTATION_INTERVAL', '0')|int == i %}selected{% endif %}>
+                        {% if i >= 60 %}
+                            {{ i // 60 }} hour{% if i // 60 > 1 %}s{% endif %}{% if i % 60 > 0 %} {{ i % 60 }} mins{% endif %}
+                        {% else %}
+                            {{ i }} minutes
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
         </div>

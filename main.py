@@ -2390,7 +2390,14 @@ def index():
             service['healthy'] = HEALTH_STATUS_CACHE.get(service['id'], True)
             
     settings = db.get_all_settings()
-    return render_template('index.html', services=services, settings=settings)
+    
+    # Get firewall status
+    firewall_enabled = True
+    rule_info = check_unifi_rule()
+    if rule_info and rule_info.get("enabled") is False:
+        firewall_enabled = False
+        
+    return render_template('index.html', services=services, settings=settings, firewall_enabled=firewall_enabled)
 
 @app.route('/onboarding', methods=['GET'])
 @login_required

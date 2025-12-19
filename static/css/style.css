@@ -219,6 +219,16 @@ body > .container {
     opacity: 0.9;
 }
 
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: saturate(0.2);
+}
+
+.btn:disabled:hover {
+    opacity: 0.4;
+}
+
 /* Services Grid */
 .services-grid {
     display: grid;
