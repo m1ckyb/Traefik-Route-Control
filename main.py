@@ -3046,6 +3046,20 @@ def api_restore_settings():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+@app.route('/api/settings', methods=['POST'])
+@login_required
+def api_save_setting():
+    """Save a single setting."""
+    data = request.get_json()
+    if not data or 'key' not in data or 'value' not in data:
+        return jsonify({"error": "Invalid request data"}), 400
+    
+    try:
+        db.set_setting(data['key'], data['value'])
+        return jsonify({"message": f"Setting '{data['key']}' saved successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/test/redis', methods=['POST'])
 @login_required
 def api_test_redis():

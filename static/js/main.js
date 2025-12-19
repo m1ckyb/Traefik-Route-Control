@@ -302,19 +302,76 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyHassConfigBtn) {
         copyHassConfigBtn.addEventListener('click', copyHassConfig);
     }
+    
+    // Attach event listener to Base URL input
+    const hassBaseUrlInput = document.getElementById('hass-base-url');
+    if (hassBaseUrlInput) {
+        hassBaseUrlInput.addEventListener('input', updateHassConfig);
+    }
 });
 
 // Home Assistant Modal functions
 function showHassModal(serviceId, serviceName) {
+    const modal = document.getElementById('hassModal');
+    
+    // Store context in modal dataset
+    modal.dataset.serviceId = serviceId;
+    modal.dataset.serviceName = serviceName;
+    
+    // Set default Base URL if empty
+    const baseUrlInput = document.getElementById('hass-base-url');
+    if (!baseUrlInput.value) {
+        baseUrlInput.value = window.location.origin;
+    }
+    
+    updateHassConfig();
+    
+    modal.style.display = 'block';
+}
+
+async function saveHassBaseUrl() {
+    const baseUrl = document.getElementById('hass-base-url').value.trim();
+    if (!baseUrl) {
+        showToast('Base URL cannot be empty', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                key: 'HASS_BASE_URL',
+                value: baseUrl
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Base URL saved as default', 'success');
+            updateHassConfig();
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function updateHassConfig() {
+    const modal = document.getElementById('hassModal');
+    const serviceId = modal.dataset.serviceId;
+    const serviceName = modal.dataset.serviceName;
+    const baseUrl = document.getElementById('hass-base-url').value.replace(/\/$/, ''); // Remove trailing slash
+    
     // Sanitize service name for YAML - remove special characters and normalize spaces
     const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const safeServiceName = serviceName.replace(/['"]/g, ''); // Remove quotes from display name
     
-    // Get the base URL from window location
-    const baseUrl = window.location.origin;
-    
     // Generate the Home Assistant YAML configuration
-    // Build the Jinja2 template string by concatenating parts to avoid template literal interpretation
     const jinjaOpen = '{{';
     const jinjaClose = '}}';
     
@@ -328,7 +385,6 @@ function showHassModal(serviceId, serviceName) {
     name: "traefik ${safeServiceName}"`;
     
     document.getElementById('hassConfig').textContent = hassConfig;
-    document.getElementById('hassModal').style.display = 'block';
 }
 
 function closeHassModal() {

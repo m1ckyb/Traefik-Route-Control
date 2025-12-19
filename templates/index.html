@@ -101,6 +101,18 @@
         </div>
         <div class="modal-body">
             <p class="modal-info">Here's the configuration for Home Assistant to control this service:</p>
+            
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="hass-base-url" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Base URL (App Address)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="hass-base-url" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text);" value="{{ settings.get('HASS_BASE_URL', '') }}">
+                    <button type="button" class="btn btn-secondary" onclick="saveHassBaseUrl()">💾 Save</button>
+                </div>
+                <p class="help-text" style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.25rem;">
+                    Edit this if Home Assistant needs to connect via IP (e.g. <code>http://192.168.1.50:5000</code>) instead of domain.
+                </p>
+            </div>
+
             <div class="code-block">
                 <pre id="hassConfig"></pre>
             </div>
