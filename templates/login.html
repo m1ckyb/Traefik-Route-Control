@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Login - Traefik Route Control</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.1">
     <script>
@@ -139,6 +140,10 @@
         const isSetup = {{ 'true' if is_setup else 'false' }};
         let currentAuthMode = 'passkey';
         
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+        
         // Helper to convert ArrayBuffer to Base64URL (URL-safe)
         function arrayBufferToBase64(buffer) {
             const binary = Array.from(new Uint8Array(buffer), byte => String.fromCharCode(byte)).join('');
@@ -201,7 +206,10 @@
                 // Request registration options from server
                 const optionsResponse = await fetch('/auth/register/begin', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({username: username})
                 });
                 
@@ -236,7 +244,10 @@
                 // Send to server
                 const verifyResponse = await fetch('/auth/register/complete', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({
                         username: username,
                         credential: credentialData
@@ -271,7 +282,10 @@
                 // Request authentication options from server
                 const optionsResponse = await fetch('/auth/login/begin', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({username: username})
                 });
                 
@@ -313,7 +327,10 @@
                 // Send to server
                 const verifyResponse = await fetch('/auth/login/complete', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({
                         username: username,
                         credential: credentialData
@@ -347,7 +364,10 @@
             try {
                 const response = await fetch('/auth/login/password', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({
                         username: username,
                         password: password
@@ -396,7 +416,10 @@
             try {
                 const response = await fetch('/auth/login/2fa', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
                     body: JSON.stringify({ code: code })
                 });
                 
