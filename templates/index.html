@@ -34,9 +34,11 @@
                     {% endif %}
                 </span>
                 <a href="/services/{{ service.id }}/edit" class="btn-icon" title="Edit Service">✏️</a>
+                {% if service.hass_entity_id %}
                 <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
-                    ⚙️
+                    🏠
                 </button>
+                {% endif %}
                 <button class="btn-icon btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)" title="Delete Service">
                     🗑️
                 </button>

@@ -46,6 +46,7 @@ All notable changes to this project will be documented in this file.
 - **UI/UX**: Eliminated page refresh when toggling or rotating services; UI now updates dynamically.
 - **UI/UX**: Standardized button sizes across the application for a more consistent interface.
 - **UI/UX**: Unified service control notifications to use the same toast style as the settings page.
+- **UI/UX**: Changed Home Assistant Settings icon to `🏠` and configured it to only appear when an Entity ID is set for the service.
 - **API**: Updated `turn_on_service` response to include the generated regex pattern.
 - **Database**: Added migrations for `password_hash`, `totp_secret`, and `recovery_codes` columns/tables.
 - **Database**: Added migration for `random_suffix` column in services table.
