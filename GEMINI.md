@@ -84,16 +84,41 @@ When working on this project, assume the user wants robust, production-ready cod
 
 ## Workflow & Changelog
 
-**CRITICAL**: Every time you make a change to the codebase that affects functionality, user experience, or configuration (features, bug fixes, refactoring, style updates), you **MUST** update `CHANGELOG.md`.
+**CRITICAL**: Every time you make a change to the codebase that affects functionality, user experience, or configuration (features, bug fixes, refactoring, style updates), you **MUST** follow these steps:
 
+1.  **Update `unreleased.md`**: 
+    - **Format**: Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) convention.
+    - **Categories**: Use sub-headers like `### Added`, `### Changed`, `### Fixed`, `### Removed`.
+    - **Content**: Be concise but descriptive. Explain *what* changed and *why*.
+    - **Process**: Perform the `unreleased.md` update in the same turn as the code changes.
 
+2.  **Rebuild Local Container**:
+    - After making changes, always rebuild and restart the local development container to verify the fix/feature.
+    - Command: `docker-compose -f docker-compose-dev.yml up -d --build`
 
-- **Format**: Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) convention.
+3.  **Git Push Restriction**:
+    - **NEVER** push code to GitHub (e.g., `git push`) unless the user explicitly instructs you to do so.
+    - Only commit changes locally unless told otherwise.
 
-- **Location**: Add new entries under the `## [Unreleased]` section.
+## Release Process
 
-- **Categories**: Use sub-headers like `### Added`, `### Changed`, `### Fixed`, `### Removed`.
+When requested to "Make a release", where `<type>` is Patch, Minor, or Major, the following steps must be performed based on Semantic Versioning:
 
-- **Content**: Be concise but descriptive. Explain *what* changed and *why* (if not obvious).
+1.  **Determine New Version**: Read the current version from `VERSION.txt` (e.g., X.Y.Z).
+    - For a Patch release, the new version will be X.Y.(Z+1).
+    - For a Minor release, the new version will be X.(Y+1).0.
+    - For a Major release, the new version will be (X+1).0.0.
 
-- **Process**: Perform the `CHANGELOG.md` update in the same turn/commit as the code changes.
+2.  **Update `CHANGELOG.md`**:
+    - Create a new version heading with the new version number and current date (e.g., `## [1.0.0] - YYYY-MM-DD`).
+    - Move all content from `unreleased.md` into this new section.
+    - Ensure the formatting is correct and consistent with previous entries.
+    - Do not add an `[Unreleased]` section back to the top of `CHANGELOG.md`. This file should only contain released versions.
+
+3.  **Clear `unreleased.md`**: After moving the content, reset `unreleased.md` to its default empty state, ready for the next development cycle.
+
+4.  **Update `VERSION.txt`**: Change the content of `VERSION.txt` to the new version number.
+
+5.  **Update `docker-compose.yml`**: Update the image tags for the dashboard and worker services to the new version number.
+
+6.  **Update `README.md` and `summary.md`**: Review both files to see if any of the new features or significant changes from the changelog need to be reflected in the project overview or feature list. Update them as necessary.

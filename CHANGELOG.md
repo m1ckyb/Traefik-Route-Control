@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.0.10] - 2025-12-19
 
 ### Added
 
@@ -64,6 +64,3 @@ All notable changes to this project will be documented in this file.
 - **UI/UX**: Fixed toast notifications disappearing too quickly by removing page reload on service toggle.
 
 ## [0.1.0] - Initial Release
-- Basic Traefik route rotation.
-- Cloudflare DNS and Origin Rule integration.
-- UniFi Firewall integration.
