@@ -161,7 +161,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function turnAllOn() {
     if (confirm('Are you sure you want to turn ON all services?')) {
-        fetch('/api/services/all/on', { method: 'POST' })
+        fetch('/api/services/all/on', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
             .then(response => response.json())
             .then(data => window.location.reload());
     }
@@ -169,7 +174,12 @@ function turnAllOn() {
 
 function turnAllOff() {
     if (confirm('Are you sure you want to turn OFF all services?')) {
-        fetch('/api/services/all/off', { method: 'POST' })
+        fetch('/api/services/all/off', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
             .then(response => response.json())
             .then(data => window.location.reload());
     }
@@ -181,7 +191,12 @@ function checkHealth(event) {
     btn.textContent = 'Checking...';
     btn.disabled = true;
     
-    fetch('/api/health/check', { method: 'POST' })
+    fetch('/api/health/check', { 
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
         .then(response => response.json())
         .then(data => {
             if (data.error) showToast('Error: ' + data.error, 'error');

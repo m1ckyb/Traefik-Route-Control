@@ -447,6 +447,9 @@ async function restoreOnboardingSettings() {
     try {
         const restoreResponse = await fetch('/api/settings/restore', {
             method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
             body: formData
         });
         
@@ -454,7 +457,12 @@ async function restoreOnboardingSettings() {
         
         if (restoreResponse.ok) {
             // Mark onboarding as complete
-            const completeResponse = await fetch('/onboarding/complete', { method: 'POST' });
+            const completeResponse = await fetch('/onboarding/complete', { 
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
             if (completeResponse.ok) {
                 alert('✅ ' + data.message + '\nSetup complete! Redirecting...');
                 window.location.href = '/';

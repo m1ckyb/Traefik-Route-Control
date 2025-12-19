@@ -579,7 +579,10 @@ async function savePassword() {
     try {
         const response = await fetch('/auth/password/change', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({new_password: password})
         });
         
@@ -599,7 +602,10 @@ async function addPasskey() {
     try {
         // 1. Get options
         const optionsResponse = await fetch('/auth/passkey/add/begin', {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         if (!optionsResponse.ok) throw new Error('Failed to start registration');
@@ -634,7 +640,10 @@ async function addPasskey() {
         // 5. Send to server
         const verifyResponse = await fetch('/auth/passkey/add/complete', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({credential: credentialData})
         });
         
@@ -653,7 +662,12 @@ async function addPasskey() {
 
 async function setup2FA() {
     try {
-        const response = await fetch('/auth/2fa/setup/begin', { method: 'POST' });
+        const response = await fetch('/auth/2fa/setup/begin', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
         const data = await response.json();
         
         if (response.ok) {
@@ -686,7 +700,10 @@ async function verifySetup2FA() {
     try {
         const response = await fetch('/auth/2fa/setup/complete', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({code: code})
         });
         
@@ -706,7 +723,12 @@ async function disable2FA() {
     if (!confirm('Are you sure you want to disable 2FA? This will reduce your account security.')) return;
     
     try {
-        const response = await fetch('/auth/2fa/disable', { method: 'POST' });
+        const response = await fetch('/auth/2fa/disable', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
         if (response.ok) {
             location.reload();
         }
@@ -719,7 +741,12 @@ async function generateRecoveryCodes() {
     if (!confirm('Generating new codes will invalidate any existing recovery codes. Continue?')) return;
     
     try {
-        const response = await fetch('/auth/2fa/recovery-codes/generate', { method: 'POST' });
+        const response = await fetch('/auth/2fa/recovery-codes/generate', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
         const data = await response.json();
         
         if (response.ok) {
@@ -752,7 +779,10 @@ async function testDiscordWebhook(event) {
     try {
         const response = await fetch('/api/notifications/test', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({webhook_url: url})
         });
         
@@ -788,7 +818,10 @@ async function testRedisConnection(event) {
     try {
         const response = await fetch('/api/test/redis', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({host: host, port: port, password: pass})
         });
         
@@ -823,7 +856,10 @@ async function testHassConnection(event) {
     try {
         const response = await fetch('/api/test/hass', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({url: url, token: token})
         });
         
@@ -858,7 +894,10 @@ async function testCloudflareConnection(event) {
     try {
         const response = await fetch('/api/test/cloudflare', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: JSON.stringify({token: token, zone_id: zoneId})
         });
         
@@ -895,6 +934,9 @@ async function restoreSettings() {
     try {
         const response = await fetch('/api/settings/restore', {
             method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
             body: formData
         });
         
@@ -935,7 +977,12 @@ function toggleFirewallSettings() {
 
 function syncFirewall() {
     if(confirm('Force sync UniFi firewall groups?')) {
-        fetch('/api/sync-firewall', { method: 'POST' })
+        fetch('/api/sync-firewall', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
             .then(async response => {
                 const text = await response.text();
                 try {

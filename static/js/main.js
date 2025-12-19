@@ -1,3 +1,8 @@
+// Helper to get CSRF token
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+}
+
 // Service control functions
 function updateServiceCard(card, data, enabled) {
     // Update Badge
@@ -50,7 +55,10 @@ async function toggleService(serviceId, enable, event) {
     
     try {
         const response = await fetch(`/api/services/${serviceId}/${action}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
@@ -86,7 +94,10 @@ async function rotateService(serviceId, event) {
     
     try {
         const response = await fetch(`/api/services/${serviceId}/rotate`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
@@ -111,7 +122,10 @@ async function deleteService(serviceId, serviceName) {
     
     try {
         const response = await fetch(`/api/services/${serviceId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
@@ -159,7 +173,10 @@ async function diagnoseService(serviceId, event) {
 async function repairService(serviceId) {
     try {
         const response = await fetch(`/api/services/${serviceId}/repair`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();

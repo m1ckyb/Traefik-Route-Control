@@ -55,6 +55,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Authentication**: Fixed a bug where login and registration would fail due to missing CSRF tokens in AJAX requests.
+- **CSRF Protection**: Fixed "Request failed" errors on Dashboard (Check Health, Toggle All), Settings, and Onboarding pages by ensuring all AJAX requests include the required CSRF token.
 - **Home Assistant Integration**: Removed misleading "global setting" references and updated service-specific Entity ID helper text. Home Assistant updates are now strictly per-service.
 - **Background Tasks**: Fixed an issue where Health Check and Port Rotation threads were not starting when running the application with Gunicorn (Docker default).
 - **UI Layout**: Fixed column spanning issues in the Settings form.
