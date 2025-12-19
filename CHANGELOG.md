@@ -54,6 +54,7 @@ All notable changes to this project will be documented in this file.
 - **UI/UX**: Improved layout of Settings page and standardized styling for inputs and notifications.
 
 ### Fixed
+- **Authentication**: Fixed a bug where login and registration would fail due to missing CSRF tokens in AJAX requests.
 - **Home Assistant Integration**: Removed misleading "global setting" references and updated service-specific Entity ID helper text. Home Assistant updates are now strictly per-service.
 - **Background Tasks**: Fixed an issue where Health Check and Port Rotation threads were not starting when running the application with Gunicorn (Docker default).
 - **UI Layout**: Fixed column spanning issues in the Settings form.
