@@ -2936,10 +2936,9 @@ def api_get_logs():
 @api_key_or_login_required
 def api_trigger_health_check():
     """Trigger an immediate health check."""
-    if perform_health_check():
-        return jsonify({"message": "Health check completed"})
-    else:
-        return jsonify({"error": "Health check failed"}), 500
+    perform_health_check()
+    # Return the full status so the UI can update dynamically
+    return jsonify(get_status())
 
 @app.route('/api/services/all/on', methods=['POST'])
 @api_key_or_login_required

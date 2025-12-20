@@ -43,6 +43,30 @@ function updateServiceCard(card, data, enabled) {
     actions.style.display = enabled ? 'flex' : 'none';
 }
 
+function updateServiceHealthUI(serviceId, isHealthy, isOnline) {
+    const card = document.querySelector(`.service-card[data-service-id="${serviceId}"]`);
+    if (!card) return;
+
+    const badge = card.querySelector('.status-badge');
+    const slider = card.querySelector('.slider');
+
+    if (isOnline) {
+        if (isHealthy) {
+            badge.className = 'status-badge status-online';
+            badge.textContent = 'ONLINE';
+            slider.classList.remove('slider-error');
+        } else {
+            badge.className = 'status-badge status-error';
+            badge.textContent = 'UNHEALTHY';
+            slider.classList.add('slider-error');
+        }
+    } else {
+        badge.className = 'status-badge status-offline';
+        badge.textContent = 'OFFLINE';
+        slider.classList.remove('slider-error');
+    }
+}
+
 async function toggleService(serviceId, enable, event) {
     const action = enable ? 'on' : 'off';
     

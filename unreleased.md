@@ -9,6 +9,7 @@
 - **UI/UX**: "Check Health" and "Rotate Port" buttons on the dashboard are now automatically disabled when the firewall is closed, with a tooltip explaining the reason.
 - **UI/UX**: Enhanced disabled button styling with reduced opacity and saturation to provide better visual feedback when actions are unavailable.
 - **UI/UX**: Dynamic status updates: Toggling services now automatically updates the firewall status badge and enables/disables dashboard buttons without a page refresh.
+- **UI/UX**: Dynamic health updates: Clicking "Check Health" now updates service badges and slider colors immediately without a page refresh.
 - **License**: Switched project license from MIT to GNU Affero General Public License v3.0 (AGPLv3) to ensure continued open-source availability of modifications.
 
 ### Fixed

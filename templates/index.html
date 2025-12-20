@@ -220,8 +220,27 @@ function checkHealth(event) {
     })
         .then(response => response.json())
         .then(data => {
-            if (data.error) showToast('Error: ' + data.error, 'error');
-            else window.location.reload();
+            if (data.error) {
+                showToast('Error: ' + data.error, 'error');
+            } else {
+                showToast('Health check completed', 'success');
+                
+                // data is now the result of get_status()
+                if (data.active_services) {
+                    data.active_services.forEach(svc => {
+                        updateServiceHealthUI(svc.id, svc.healthy, svc.status === 'ONLINE');
+                    });
+                }
+                
+                // For services that are OFFLINE (not in active_services)
+                document.querySelectorAll('.service-card').forEach(card => {
+                    const id = parseInt(card.dataset.serviceId);
+                    const isActive = data.active_services.some(svc => svc.id === id);
+                    if (!isActive) {
+                        updateServiceHealthUI(id, true, false);
+                    }
+                });
+            }
         })
         .catch(err => showToast('Request failed', 'error'))
         .finally(() => {
