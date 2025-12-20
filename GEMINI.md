@@ -100,6 +100,23 @@ When working on this project, assume the user wants robust, production-ready cod
     - **NEVER** push code to GitHub (e.g., `git push`) unless the user explicitly instructs you to do so.
     - Only commit changes locally unless told otherwise.
 
+## Experimental: Non-Root & Permission Handling (test-code branch)
+
+The `test-code` branch contains an experimental setup for running the container as a non-root user while maintaining volume write access.
+
+- **Non-Root User**: The image creates an `appuser` and `appgroup`.
+- **Configurable IDs**: Supports `PUID` and `PGID` environment variables (defaulting to 1000) to match host file ownership.
+- **Runtime Permission Fix**: Uses an `entrypoint.sh` script and `su-exec`. On startup, the container:
+    1. Runs as `root`.
+    2. Adjusts `appuser` UID/GID to match the environment.
+    3. Recursively `chown`s `/app/data` and `/app`.
+    4. Drops privileges and executes the app as `appuser`.
+
+### ⚠️ WSL2 Permission Caveat
+When running this setup on a **Windows host via WSL2 mount** (`/mnt/c/...`), you may encounter `sqlite3.OperationalError: attempt to write a readonly database`. This is a known issue where Windows host mounts do not correctly support Linux permission changes or SQLite file locking.
+
+**Recommendation**: This setup is designed for **Native Linux** environments with native volumes (e.g., ext4). For WSL2 development, stick to the `dev` branch or move the project into the native WSL filesystem (e.g., `~/code/`) rather than the mounted Windows drive.
+
 ## Release Process
 
 When requested to "Make a dev release":
