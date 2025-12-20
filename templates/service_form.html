@@ -7,6 +7,7 @@
     <h2>{% if service %}Edit Service{% else %}Add New Service{% endif %}</h2>
     
     <form method="POST" class="service-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="form-group">
             <label for="name">Service Name</label>
             <input type="text" id="name" name="name" required 
@@ -40,19 +41,30 @@
         </div>
         
         <div class="form-group">
-            <label for="subdomain_prefix">Subdomain Prefix</label>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="subdomain_prefix" id="prefix-label">Subdomain Prefix</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.85rem; color: var(--text-dim);">Randomize Suffix <span class="tooltip-icon" data-tooltip="If enabled, appends a random string to the prefix. If disabled, uses the prefix as the exact subdomain.">ℹ️</span></span>
+                    <div class="switch-75">
+                        <label class="switch">
+                            <input type="checkbox" id="random_suffix" name="random_suffix" {% if not service or service.random_suffix != 0 %}checked{% endif %} onchange="updatePrefixHelp()">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
             <input type="text" id="subdomain_prefix" name="subdomain_prefix" required 
                    value="{{ service.subdomain_prefix if service else '' }}"
-                   placeholder="jf" maxlength="10">
-            <small>Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
+                   placeholder="jf" maxlength="63">
+            <small id="prefix-help">Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
         </div>
         
         <div class="form-group">
             <label for="hass_entity_id">Home Assistant Entity ID (optional)</label>
             <input type="text" id="hass_entity_id" name="hass_entity_id" 
-                   value="{{ service.hass_entity_id if service else '' }}"
+                   value="{{ service.hass_entity_id if service and service.hass_entity_id else '' }}"
                    placeholder="input_text.jellyfin_url">
-            <small>Specific entity ID for this service. Leave empty to use global setting.</small>
+            <small>Specific entity ID for this service (e.g., input_text.jellyfin_url). Leave empty to disable Home Assistant updates for this service.</small>
         </div>
         
         <div class="form-actions">
@@ -63,4 +75,26 @@
         </div>
     </form>
 </div>
+
+<script>
+function updatePrefixHelp() {
+    const isRandom = document.getElementById('random_suffix').checked;
+    const helpText = document.getElementById('prefix-help');
+    const input = document.getElementById('subdomain_prefix');
+    const label = document.getElementById('prefix-label');
+    
+    if (isRandom) {
+        helpText.innerHTML = "Short prefix for rotating subdomains (e.g., 'jf' creates <code>jf-abc123.domain.com</code>)";
+        input.placeholder = "jf";
+        label.textContent = "Subdomain Prefix";
+    } else {
+        helpText.innerHTML = "Full subdomain to use (e.g., 'jellyfin' creates <code>jellyfin.domain.com</code>)";
+        input.placeholder = "jellyfin";
+        label.textContent = "Subdomain Hostname";
+    }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', updatePrefixHelp);
+</script>
 {% endblock %}

@@ -4,87 +4,360 @@
 
 {% block content %}
 <div class="form-container">
-    <h2>Global Settings</h2>
+    <h2>Settings</h2>
     
     <form method="POST" class="settings-form">
-        <h3>Cloudflare Settings</h3>
-        
-        <div class="form-group">
-            <label for="CF_API_TOKEN">Cloudflare API Token</label>
-            <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
-                   value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="settings-tabs">
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-general')">General</button>
+            <button type="button" class="tab-btn active" onclick="openTab(event, 'tab-security')">Security</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-monitoring')">Monitoring</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-infrastructure')">Infrastructure</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-integrations')">Integrations</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-system')">System Info</button>
+        </div>
+
+        <!-- Tab: General -->
+        <div id="tab-general" class="tab-content" style="display: none;">
+            <h3>Appearance</h3>
+            <div class="form-group">
+                <label for="dark_mode_toggle">Dark Mode</label>
+                <label class="switch">
+                    <input type="checkbox" id="dark_mode_toggle" onchange="window.toggleTheme(this.checked)">
+                    <span class="slider round"></span>
+                </label>
+                <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Toggle dark mode theme (persists across sessions)</p>
+            </div>
+
+            <h3>Backup & Restore</h3>
+            <div class="settings-grid-2-col">
+                <div class="form-group">
+                    <label>Backup Configuration</label>
+                    <button type="button" class="btn btn-secondary" onclick="window.location.href='/api/settings/backup'">⬇️ Download Settings Backup</button>
+                    <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Download all current settings as a JSON file.</p>
+                </div>
+
+                <div class="form-group">
+                    <label>Restore Configuration</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="restore_file" accept=".json" style="flex: 1;">
+                        <button type="button" class="btn btn-secondary" onclick="restoreSettings()">⬆️ Restore</button>
+                    </div>
+                    <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">Upload a previously backed up JSON file to restore settings.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Security -->
+        <div id="tab-security" class="tab-content" style="display: block;">
+        <div class="form-group" style="background: var(--bg-card); padding: 1rem; border: 1px solid var(--border); border-radius: 4px; display: none;">
+            <label for="ENFORCE_2FA" style="font-weight: bold; color: var(--primary);">🛡️ Enforce 2FA Globally</label>
+            <select id="ENFORCE_2FA" name="ENFORCE_2FA">
+                <option value="0" {% if settings.get('ENFORCE_2FA', '0') == '0' %}selected{% endif %}>Disabled (Optional)</option>
+                <option value="1" {% if settings.get('ENFORCE_2FA', '0') == '1' %}selected{% endif %}>Enabled (Mandatory)</option>
+            </select>
+            <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">If enabled, all users will be forced to set up 2FA to access the dashboard.</p>
+        </div>
+
+                <h3>Security Settings</h3>
+
+                
+
+                <div class="settings-grid-2-col">
+
+                    <div class="form-group">
+
+                        <label>Password</label>
+                <div class="password-actions">
+                    {% if has_password %}
+                        <p class="status-text">✅ Password is set</p>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="togglePasswordForm()">Change Password</button>
+                    {% else %}
+                        <p class="status-text warning">⚠️ No password set</p>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="togglePasswordForm()">Set Password</button>
+                    {% endif %}
+                </div>
+                
+                <div id="password-form" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px;">
+                    <div class="form-group">
+                        <label for="new_password">New Password (min 8 chars)</label>
+                        <input type="password" id="new_password" placeholder="Enter new password">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="savePassword()">Save Password</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Passkeys</label>
+                <ul class="passkey-list">
+                    {% for cred in credentials %}
+                    <li>🔑 Passkey added on {{ cred.created_at }}</li>
+                    {% endfor %}
+                </ul>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addPasskey()">➕ Add New Passkey</button>
+            </div>
+
+            <div class="form-group">
+                <label>Two-Factor Authentication (2FA)</label>
+                <div class="2fa-actions">
+                    {% if has_2fa %}
+                        <p class="status-text">✅ 2FA is enabled</p>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="disable2FA()">Disable 2FA</button>
+                    {% else %}
+                        <p class="status-text warning">⚠️ 2FA is not enabled</p>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="setup2FA()">Setup 2FA</button>
+                    {% endif %}
+                </div>
+                
+                <div id="2fa-setup" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
+                    <p>Scan this QR code with your authenticator app:</p>
+                    <img id="qr-code-img" src="" alt="QR Code" style="background: white; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <div style="margin: 10px 0;">
+                        <p style="font-size: 0.9em; color: var(--text-dim); margin-bottom: 5px;">Or enter code manually:</p>
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+                            <code id="totp-secret-display" style="background: var(--bg-card); padding: 5px 10px; border-radius: 4px; font-family: monospace; font-weight: bold;"></code>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="copyTotpSecret()">📋 Copy</button>
+                        </div>
+                    </div>
+                    <p>Then enter the 6-digit code below:</p>
+                    <input type="text" id="setup_totp_code" placeholder="123456" style="width: 150px; text-align: center; margin-bottom: 10px;">
+                    <button type="button" class="btn btn-primary btn-block" onclick="verifySetup2FA()">Verify & Enable</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Recovery Codes</label>
+                <div class="recovery-actions">
+                    <p class="status-text">
+                        {% if recovery_codes_count > 0 %}
+                        ✅ {{ recovery_codes_count }} unused codes remaining
+                        {% else %}
+                        ⚠️ No recovery codes generated
+                        {% endif %}
+                    </p>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="generateRecoveryCodes()">🔄 Generate New Codes</button>
+                </div>
+                <div id="recovery-codes-display" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 4px;">
+                    <p class="warning" style="margin-bottom: 0.5rem;">⚠️ Save these codes somewhere safe. They will not be shown again.</p>
+                    <div id="codes-list" style="font-family: monospace; font-size: 1.1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="heading-with-button">
+            <h3 style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 2rem;">API Keys</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="showApiEndpointsModal()">View API Endpoints</button>
         </div>
         
-        <div class="form-group">
-            <label for="CF_ZONE_ID">Cloudflare Zone ID</label>
-            <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
-                   value="{{ settings.get('CF_ZONE_ID', '') }}">
+        {% if session.get('new_api_key') %}
+        <div class="alert alert-success">
+            <h4>⚠️ New API Key Created</h4>
+            <p><strong>Save this key now - it will not be shown again!</strong></p>
+            <div class="api-key-display">
+                <code id="new-api-key">{{ session.pop('new_api_key') }}</code>
+                <button type="button" onclick="copyApiKey()" class="btn btn-secondary">Copy</button>
+                <span id="copy-status" class="copy-status"></span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="api-key-section">
+            <div class="section">
+                <h4>Create New API Key</h4>
+                <form method="POST" action="/api-keys/create" class="form-horizontal">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="form-group">
+                        <label for="name">Key Name:</label>
+                        <input type="text" id="name" name="name" placeholder="e.g., Home Automation Script" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Key</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h4>Your API Keys</h4>
+                {% if api_keys %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Created</th>
+                            <th>Last Used</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key in api_keys %}
+                        <tr>
+                            <td>{{ key.name }}</td>
+                            <td>{{ key.created_at }}</td>
+                            <td>{{ key.last_used_at or 'Never' }}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm" 
+                                        onclick="showDeleteConfirm({{ key.id }}, '{{ key.name }}')">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>No API keys created yet.</p>
+                {% endif %}
+            </div>
+        </div>
+        </div>
+
+        <!-- Tab: Monitoring -->
+        <div id="tab-monitoring" class="tab-content" style="display: none;">
+        <h3>Health Check</h3>
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="HEALTH_CHECK_INTERVAL">Check Interval (seconds) <span class="tooltip-icon" data-tooltip="How often to check service health in the background (min 10s)">ℹ️</span></label>
+                <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" required 
+                       value="{{ settings.get('HEALTH_CHECK_INTERVAL', '60') }}" min="10">
+            </div>
+            
+            <div class="form-group">
+                <label for="HEALTH_CHECK_TIMEOUT">Request Timeout (seconds) <span class="tooltip-icon" data-tooltip="Maximum time to wait for a service to respond">ℹ️</span></label>
+                <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" required 
+                       value="{{ settings.get('HEALTH_CHECK_TIMEOUT', '1') }}" min="1" max="30">
+            </div>
+        </div>
+
+        <h3>Notifications</h3>
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="NOTIFY_EVENTS_HEALTH">Health Alerts <span class="tooltip-icon" data-tooltip="Notify when services become unhealthy or recover">ℹ️</span></label>
+                <select id="NOTIFY_EVENTS_HEALTH" name="NOTIFY_EVENTS_HEALTH">
+                    <option value="1" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '1' %}selected{% endif %}>Enabled</option>
+                    <option value="0" {% if settings.get('NOTIFY_EVENTS_HEALTH', '1') == '0' %}selected{% endif %}>Disabled</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="NOTIFY_EVENTS_SYSTEM">System Events <span class="tooltip-icon" data-tooltip="Notify about system events (e.g. startup, shutdown)">ℹ️</span></label>
+                <select id="NOTIFY_EVENTS_SYSTEM" name="NOTIFY_EVENTS_SYSTEM">
+                    <option value="1" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '1' %}selected{% endif %}>Enabled</option>
+                    <option value="0" {% if settings.get('NOTIFY_EVENTS_SYSTEM', '1') == '0' %}selected{% endif %}>Disabled</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="DISCORD_WEBHOOK_URL">Discord Webhook URL <span class="tooltip-icon" data-tooltip="Leave empty to disable notifications">ℹ️</span></label>
+                <input type="url" id="DISCORD_WEBHOOK_URL" name="DISCORD_WEBHOOK_URL" 
+                       value="{{ settings.get('DISCORD_WEBHOOK_URL', '') }}"
+                       placeholder="https://discord.com/api/webhooks/...">
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="testDiscordWebhook(event)">🔔 Test Notification</button>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- Tab: Infrastructure -->
+        <div id="tab-infrastructure" class="tab-content" style="display: none;">
+                <h3>Cloudflare</h3>
+                <div class="settings-grid-2-col">
+                    <div class="form-group">
+                        <label for="CF_API_TOKEN">Cloudflare API Token <span class="tooltip-icon" data-tooltip="Token with Zone:DNS:Edit permissions">ℹ️</span></label>
+                        <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                               value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="CF_ZONE_ID">Cloudflare Zone ID <span class="tooltip-icon" data-tooltip="The Zone ID for your domain from Cloudflare dashboard">ℹ️</span></label>
+                        <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                               value="{{ settings.get('CF_ZONE_ID', '') }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="DOMAIN_ROOT">Domain Root <span class="tooltip-icon" data-tooltip="Your main domain (e.g., example.com)">ℹ️</span></label>
+                        <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                               value="{{ settings.get('DOMAIN_ROOT', '') }}"
+                               pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
+                               title="Please enter a valid domain name (e.g., example.com)"
+                               placeholder="example.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ORIGIN_RULE_NAME">Origin Rule Name <span class="tooltip-icon" data-tooltip="Name of the Cloudflare Origin Rule to manage">ℹ️</span></label>
+                        <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                               value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
+                               placeholder="Service Rotation">
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn btn-secondary" onclick="testCloudflareConnection(event)">☁️ Test Cloudflare Connection</button>
+                    </div>
+                </div>        
+        <h3>Traefik / Redis</h3>
+        <div class="settings-grid-2-col">
+            <div class="form-group">
+                <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
+                <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                       value="{{ settings.get('REDIS_HOST', '') }}"
+                       placeholder="127.0.0.1">
+            </div>
+            
+            <div class="form-group">
+                <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
+                <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                       value="{{ settings.get('REDIS_PORT', '6379') }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
+                <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                       value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
+                </div>
+            </div>
+        </div>
         </div>
         
-        <div class="form-group">
-            <label for="DOMAIN_ROOT">Domain Root</label>
-            <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
-                   value="{{ settings.get('DOMAIN_ROOT', '') }}"
-                   placeholder="example.com">
-        </div>
-        
-        <div class="form-group">
-            <label for="ORIGIN_RULE_NAME">Origin Rule Name</label>
-            <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
-                   value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
-                   placeholder="Service Rotation">
-        </div>
-        
-        <h3>Traefik / Redis Settings</h3>
-        
-        <div class="form-group">
-            <label for="REDIS_HOST">Redis Host</label>
-            <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
-                   value="{{ settings.get('REDIS_HOST', '') }}"
-                   placeholder="127.0.0.1">
-        </div>
-        
-        <div class="form-group">
-            <label for="REDIS_PORT">Redis Port</label>
-            <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
-                   value="{{ settings.get('REDIS_PORT', '6379') }}">
-        </div>
-        
-        <div class="form-group">
-            <label for="REDIS_PASS">Redis Password (optional)</label>
-            <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
-                   value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
-        </div>
-        
-        <h3>Home Assistant Settings</h3>
-        
-        <div class="form-group">
-            <label for="HASS_ENABLED">Enable Home Assistant Integration</label>
-            <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleHomeAssistantSettings()">
+        <!-- Tab: Integrations -->
+        <div id="tab-integrations" class="tab-content" style="display: none;">
+        <div class="form-group heading-with-switch">
+            <h3 style="margin-bottom: 0;">Home Assistant</h3>
+            <div class="switch-75">
+                <label class="switch">
+                    <input type="checkbox" id="hass-toggle" {% if settings.get('HASS_ENABLED', '0') == '1' %}checked{% endif %}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <select id="HASS_ENABLED" name="HASS_ENABLED" onchange="toggleHomeAssistantSettings()" style="display: none;">
                 <option value="0" {% if settings.get('HASS_ENABLED', '0') == '0' %}selected{% endif %}>Disabled</option>
                 <option value="1" {% if settings.get('HASS_ENABLED', '0') == '1' %}selected{% endif %}>Enabled</option>
             </select>
         </div>
+        <p class="help-text" style="font-size: 0.85rem; color: var(--text-dim); margin-top: -1rem; margin-bottom: 1.5rem;">
+            Update Home Assistant entities with service status 
+            <span class="tooltip-icon" data-tooltip="Update Home Assistant entities with service status">ℹ️</span>
+        </p>
         
         <div id="hass-settings" style="{% if settings.get('HASS_ENABLED', '1') == '0' %}display: none;{% else %}display: grid;{% endif %}">
             <div class="form-group">
-                <label for="HASS_URL">Home Assistant URL</label>
-                <input type="text" id="HASS_URL" name="HASS_URL" 
+                <label for="HASS_URL">Home Assistant URL <span class="tooltip-icon" data-tooltip="URL of your Home Assistant instance">ℹ️</span></label>
+                <input type="url" id="HASS_URL" name="HASS_URL" 
                        value="{{ settings.get('HASS_URL', '') }}"
                        placeholder="http://homeassistant.local:8123">
             </div>
             
             <div class="form-group">
-                <label for="HASS_TOKEN">Home Assistant Token</label>
+                <label for="HASS_TOKEN">Home Assistant Token <span class="tooltip-icon" data-tooltip="Long-Lived Access Token from Home Assistant">ℹ️</span></label>
                 <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
                        value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off">
             </div>
+
+            <div class="form-group">
+                <button type="button" class="btn btn-secondary" onclick="testHassConnection(event)">🔌 Test HA Connection</button>
+            </div>
         </div>
         
-        <h3>Firewall Settings</h3>
+        <h3>Firewall</h3>
         
         <div class="form-group">
-            <label for="FIREWALL_TYPE">Firewall Controller Type</label>
+            <label for="FIREWALL_TYPE">Firewall Controller Type <span class="tooltip-icon" data-tooltip="System used to manage firewall rules">ℹ️</span></label>
             <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleFirewallSettings()">
                 <option value="none" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}selected{% endif %}>None</option>
                 <option value="unifi" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'unifi' %}selected{% endif %}>UniFi</option>
@@ -93,32 +366,117 @@
         
         <div id="unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% else %}display: grid;{% endif %}">
             <div class="form-group">
-                <label for="UNIFI_HOST">UniFi Host</label>
+                <label for="UNIFI_HOST">UniFi Host <span class="tooltip-icon" data-tooltip="IP address or hostname of UniFi Controller/Console">ℹ️</span></label>
                 <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
                        value="{{ settings.get('UNIFI_HOST', '') }}"
                        placeholder="192.168.1.1">
             </div>
             
             <div class="form-group">
-                <label for="UNIFI_USER">UniFi Username</label>
+                <label for="UNIFI_USER">UniFi Username <span class="tooltip-icon" data-tooltip="Local admin username for UniFi">ℹ️</span></label>
                 <input type="text" id="UNIFI_USER" name="UNIFI_USER" 
                        value="{{ settings.get('UNIFI_USER', '') }}">
             </div>
             
             <div class="form-group">
-                <label for="UNIFI_PASS">UniFi Password</label>
+                <label for="UNIFI_PASS">UniFi Password <span class="tooltip-icon" data-tooltip="Local admin password for UniFi">ℹ️</span></label>
                 <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
                        value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
             </div>
             
             <div class="form-group">
-                <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name</label>
+                <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name <span class="tooltip-icon" data-tooltip="Name of the Port Forward rule to toggle">ℹ️</span></label>
                 <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
                        value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
                        placeholder="External">
             </div>
+
+            <div class="form-group">
+                <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group) <span class="tooltip-icon" data-tooltip="UniFi Address Group to sync active service IPs to">ℹ️</span></label>
+                <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed IPs">
+            </div>
+
+            <div class="form-group">
+                <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group) <span class="tooltip-icon" data-tooltip="UniFi Port Group to sync active service ports to">ℹ️</span></label>
+                <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
+                       value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
+                       placeholder="VLAN 50 Allowed Ports">
+            </div>
+
+            <div class="form-group">
+                <label for="TRAEFIK_LAN_CIDR">Traefik LAN CIDR (Excluded from IP List) <span class="tooltip-icon" data-tooltip="Subnet to exclude from IP group (e.g. if Traefik is local)">ℹ️</span></label>
+                <input type="text" id="TRAEFIK_LAN_CIDR" name="TRAEFIK_LAN_CIDR" 
+                       value="{{ settings.get('TRAEFIK_LAN_CIDR', '') }}"
+                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/(3[0-2]|[12]?[0-9]))?$"
+                       title="Please enter a valid IPv4 address or CIDR (e.g. 192.168.1.1 or 192.168.1.0/24)"
+                       placeholder="192.168.50.0/24">
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="syncFirewall()">🔄 Sync Firewall Groups Now</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes.">ℹ️</span></label>
+                <select id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL">
+                    <option value="0" {% if settings.get('PORT_ROTATION_INTERVAL', '0') == '0' %}selected{% endif %}>Disabled</option>
+                    {% for i in range(30, 510, 30) %}
+                    <option value="{{ i }}" {% if settings.get('PORT_ROTATION_INTERVAL', '0')|int == i %}selected{% endif %}>
+                        {% if i >= 60 %}
+                            {{ i // 60 }} hour{% if i // 60 > 1 %}s{% endif %}{% if i % 60 > 0 %} {{ i % 60 }} mins{% endif %}
+                        {% else %}
+                            {{ i }} minutes
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
         </div>
         
+        <!-- Tab: System Info -->
+        <div id="tab-system" class="tab-content" style="display: none;">
+            <h3>System Information</h3>
+            <div class="system-grid">
+                <div class="system-card">
+                    <h4>Application</h4>
+                    <div class="stat-row">
+                        <span class="stat-label">Version</span>
+                        <span class="stat-value">{{ version }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Uptime</span>
+                        <span class="stat-value">{{ uptime }}</span>
+                    </div>
+                </div>
+
+                <div class="system-card">
+                    <h4>Database</h4>
+                    <div class="stat-row">
+                        <span class="stat-label">Size</span>
+                        <span class="stat-value">{{ db_size }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Services</span>
+                        <span class="stat-value">{{ db_stats.services }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Users</span>
+                        <span class="stat-value">{{ db_stats.users }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">API Keys</span>
+                        <span class="stat-value">{{ db_stats.api_keys }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Passkeys</span>
+                        <span class="stat-value">{{ db_stats.credentials }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">💾 Save Settings</button>
             <a href="/" class="btn btn-secondary">Cancel</a>
@@ -126,7 +484,485 @@
     </form>
 </div>
 
+<!-- API Endpoints Modal -->
+<div id="api-endpoints-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Available API Endpoints</h3>
+            <span class="modal-close" onclick="hideApiEndpointsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Use these endpoints with your API key in the <code>X-API-Key</code> header.</p>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/status</code></td>
+                        <td>Get overall system status</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/firewall-status</code></td>
+                        <td>Get firewall status</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-get">GET</span></td>
+                        <td><code>/api/services/{id}/status</code></td>
+                        <td>Get status of a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/on</code></td>
+                        <td>Turn on a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/off</code></td>
+                        <td>Turn off a specific service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-post">POST</span></td>
+                        <td><code>/api/services/{id}/rotate</code></td>
+                        <td>Rotate URL for a service</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-delete">DELETE</span></td>
+                        <td><code>/api/services/{id}</code></td>
+                        <td>Delete a service</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Confirm Deletion</h3>
+        <p>Are you sure you want to delete the API key "<strong id="delete-key-name"></strong>"?</p>
+        <p class="warning-text">This action cannot be undone.</p>
+        <div class="modal-buttons">
+            <button type="button" onclick="hideDeleteConfirm()" class="btn btn-secondary">Cancel</button>
+            <form id="delete-form" method="POST" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <p>Are you sure you want to delete the API key <strong id="delete-key-name"></strong>?</p>
+        </div>
+    </div>
+</div>
+
 <script>
+// WebAuthn Helpers
+function arrayBufferToBase64(buffer) {
+    const binary = Array.from(new Uint8Array(buffer), byte => String.fromCharCode(byte)).join('');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function base64ToArrayBuffer(base64) {
+    let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+    while (standardBase64.length % 4 !== 0) standardBase64 += '=';
+    const binary = atob(standardBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+}
+
+function togglePasswordForm() {
+    const form = document.getElementById('password-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function savePassword() {
+    const password = document.getElementById('new_password').value;
+    if (password.length < 8) {
+        showToast('Password must be at least 8 characters long', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/auth/password/change', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({new_password: password})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Password updated successfully', 'success');
+            location.reload();
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error updating password: ' + e.message, 'error');
+    }
+}
+
+async function addPasskey() {
+    try {
+        // 1. Get options
+        const optionsResponse = await fetch('/auth/passkey/add/begin', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        
+        if (!optionsResponse.ok) throw new Error('Failed to start registration');
+        const options = await optionsResponse.json();
+        
+        // 2. Convert buffers
+        options.challenge = base64ToArrayBuffer(options.challenge);
+        options.user.id = base64ToArrayBuffer(options.user.id);
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(c => ({
+                ...c,
+                id: base64ToArrayBuffer(c.id)
+            }));
+        }
+        
+        // 3. Create credential
+        const credential = await navigator.credentials.create({
+            publicKey: options
+        });
+        
+        // 4. Prepare response
+        const credentialData = {
+            id: credential.id,
+            rawId: arrayBufferToBase64(credential.rawId),
+            response: {
+                attestationObject: arrayBufferToBase64(credential.response.attestationObject),
+                clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON)
+            },
+            type: credential.type
+        };
+        
+        // 5. Send to server
+        const verifyResponse = await fetch('/auth/passkey/add/complete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({credential: credentialData})
+        });
+        
+        const result = await verifyResponse.json();
+        if (verifyResponse.ok) {
+            showToast('Passkey added successfully!', 'success');
+            location.reload();
+        } else {
+            showToast('Error: ' + result.error, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('Failed to add passkey: ' + e.message, 'error');
+    }
+}
+
+async function setup2FA() {
+    try {
+        const response = await fetch('/auth/2fa/setup/begin', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('qr-code-img').src = data.qr_code;
+            document.getElementById('totp-secret-display').textContent = data.secret;
+            document.getElementById('2fa-setup').style.display = 'block';
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Failed to start 2FA setup: ' + e.message, 'error');
+    }
+}
+
+function copyTotpSecret() {
+    const secret = document.getElementById('totp-secret-display').textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(secret).then(() => {
+            showToast('Secret copied to clipboard!', 'success');
+        });
+    } else {
+        prompt("Copy this code:", secret);
+    }
+}
+
+async function verifySetup2FA() {
+    const code = document.getElementById('setup_totp_code').value;
+    if (!code) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/setup/complete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({code: code})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('2FA Enabled Successfully!', 'success');
+            location.reload();
+        } else {
+            showToast('Verification failed: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function disable2FA() {
+    if (!confirm('Are you sure you want to disable 2FA? This will reduce your account security.')) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/disable', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function generateRecoveryCodes() {
+    if (!confirm('Generating new codes will invalidate any existing recovery codes. Continue?')) return;
+    
+    try {
+        const response = await fetch('/auth/2fa/recovery-codes/generate', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            const list = document.getElementById('codes-list');
+            list.innerHTML = '';
+            data.codes.forEach(code => {
+                const el = document.createElement('div');
+                el.textContent = code;
+                list.appendChild(el);
+            });
+            document.getElementById('recovery-codes-display').style.display = 'block';
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function testDiscordWebhook(event) {
+    const url = document.getElementById('DISCORD_WEBHOOK_URL').value;
+    if (!url) {
+        showToast('Please enter a Webhook URL first', 'warning');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/notifications/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({webhook_url: url})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Test notification sent successfully!', 'success');
+        } else {
+            showToast('Error: ' + (data.error || 'Failed to send notification'), 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function testRedisConnection(event) {
+    const host = document.getElementById('REDIS_HOST').value;
+    const port = document.getElementById('REDIS_PORT').value;
+    const pass = document.getElementById('REDIS_PASS').value;
+    
+    if (!host || !port) {
+        showToast('Please enter Redis Host and Port', 'warning');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/test/redis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({host: host, port: port, password: pass})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Connection failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function testHassConnection(event) {
+    const url = document.getElementById('HASS_URL').value;
+    const token = document.getElementById('HASS_TOKEN').value;
+    
+    if (!url || !token) {
+        showToast('Please enter Home Assistant URL and Token', 'warning');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/test/hass', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({url: url, token: token})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Connection failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function testCloudflareConnection(event) {
+    const token = document.getElementById('CF_API_TOKEN').value;
+    const zoneId = document.getElementById('CF_ZONE_ID').value;
+    
+    if (!token || !zoneId) {
+        showToast('Please enter Cloudflare API Token and Zone ID', 'warning');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/test/cloudflare', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({token: token, zone_id: zoneId})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Connection failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function restoreSettings() {
+    const fileInput = document.getElementById('restore_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showToast('Please select a backup file first.', 'warning');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to restore settings? This will overwrite current configuration.')) {
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/settings/restore', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast(data.message, 'success');
+            window.location.reload();
+        } else {
+            showToast(data.error || 'Restore failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
 function toggleHomeAssistantSettings() {
     const enabled = document.getElementById('HASS_ENABLED').value === '1';
     const hassSettings = document.getElementById('hass-settings');
@@ -148,5 +984,434 @@ function toggleFirewallSettings() {
         unifiSettings.style.display = 'none';
     }
 }
+
+function syncFirewall() {
+    if(confirm('Force sync UniFi firewall groups?')) {
+        fetch('/api/sync-firewall', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+            .then(async response => {
+                const text = await response.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error(`Invalid JSON (Status ${response.status})`);
+                }
+            })
+            .then(data => {
+                if(data.error) showToast('Error: ' + data.error, 'error');
+                else showToast(data.message || 'Sync triggered. Check logs for details.', 'success');
+            })
+            .catch(err => showToast('Error: ' + err.message, 'error'));
+    }
+}
+
+function openTab(evt, tabName) {
+    // Hide all tab content
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].style.display = "none";
+    }
+
+    // Remove active class from all buttons
+    const tabBtns = document.getElementsByClassName("tab-btn");
+    for (let i = 0; i < tabBtns.length; i++) {
+        tabBtns[i].classList.remove("active");
+    }
+
+    // Show current tab and activate button
+    document.getElementById(tabName).style.display = "block";
+    if (evt) {
+        evt.currentTarget.classList.add("active");
+    } else {
+        // Find button for this tab if called programmatically
+        const btn = document.querySelector(`.tab-btn[onclick*="${tabName}"]`);
+        if (btn) btn.classList.add("active");
+    }
+    
+    // Save state
+    localStorage.setItem('activeSettingsTab', tabName);
+}
+
+// Initialize tabs
+document.addEventListener('DOMContentLoaded', function() {
+    const activeTab = localStorage.getItem('activeSettingsTab') || 'tab-security';
+    openTab(null, activeTab);
+    
+    // Initialize Dark Mode Toggle
+    const darkModeToggle = document.getElementById('dark_mode_toggle');
+    if (darkModeToggle) {
+        darkModeToggle.checked = document.documentElement.classList.contains('dark-mode');
+    }
+
+    // Link HASS toggle to hidden select
+    const hassToggle = document.getElementById('hass-toggle');
+    if (hassToggle) {
+        const hassEnabledSelect = document.getElementById('HASS_ENABLED');
+        hassToggle.addEventListener('change', function() {
+            hassEnabledSelect.value = this.checked ? '1' : '0';
+            // Manually trigger change event on the select to run toggleHomeAssistantSettings()
+            hassEnabledSelect.dispatchEvent(new Event('change'));
+        });
+    }
+});
+
+function copyApiKey() {
+    const keyElement = document.getElementById('new-api-key');
+    const statusElement = document.getElementById('copy-status');
+    const text = keyElement.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        statusElement.textContent = '✓ Copied!';
+        statusElement.className = 'copy-status success';
+        setTimeout(() => {
+            statusElement.textContent = '';
+            statusElement.className = 'copy-status';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        statusElement.textContent = '✗ Failed to copy';
+        statusElement.className = 'copy-status error';
+    });
+}
+
+function showDeleteConfirm(keyId, keyName) {
+    const modal = document.getElementById('delete-modal');
+    const nameElement = document.getElementById('delete-key-name');
+    const form = document.getElementById('delete-form');
+    
+    nameElement.textContent = keyName;
+    form.action = `/api-keys/${keyId}/delete`;
+    modal.style.display = 'flex';
+}
+
+function hideDeleteConfirm() {
+    const modal = document.getElementById('delete-modal');
+    modal.style.display = 'none';
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideDeleteConfirm();
+        hideApiEndpointsModal();
+    }
+});
+
+// Close modal on outside click
+window.addEventListener('click', (e) => {
+    const deleteModal = document.getElementById('delete-modal');
+    if (e.target == deleteModal) {
+        hideDeleteConfirm();
+    }
+    const endpointsModal = document.getElementById('api-endpoints-modal');
+    if (e.target == endpointsModal) {
+        hideApiEndpointsModal();
+    }
+});
+
+function showApiEndpointsModal() {
+    document.getElementById('api-endpoints-modal').style.display = 'flex';
+}
+
+function hideApiEndpointsModal() {
+    document.getElementById('api-endpoints-modal').style.display = 'none';
+}
 </script>
+
+<style>
+.security-section {
+    background: var(--bg-card);
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    grid-column: span 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.settings-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+    gap: 1rem;
+    overflow-x: auto;
+    grid-column: 1 / -1;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 0.75rem 1rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-content {
+    animation: fadeIn 0.3s ease;
+    grid-column: 1 / -1;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.api-key-display {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.api-key-display code {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.copy-status {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.copy-status.success {
+    color: var(--success);
+}
+
+.copy-status.error {
+    color: var(--danger);
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.warning-text {
+    color: var(--warning);
+    background: rgba(234, 88, 12, 0.1);
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--warning);
+    margin-top: 1rem;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.section {
+    margin-bottom: 2rem;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.table th,
+.table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.table thead th {
+    font-weight: 600;
+    background: var(--bg-input);
+}
+
+.form-horizontal .form-group {
+    margin-bottom: 1rem;
+}
+
+.form-horizontal label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-horizontal input {
+    width: 100%;
+    max-width: 400px;
+}
+
+.system-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.system-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.system-card h4 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    color: var(--text-dim);
+}
+
+.stat-value {
+    font-weight: 600;
+    font-family: monospace;
+}
+
+.settings-grid-2-col {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.heading-with-switch {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+
+.heading-with-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* The h3 inside has margin-top, which provides spacing */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding-top: 1rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25em 0.5em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    color: #fff;
+}
+
+.badge-get {
+    background-color: var(--success);
+}
+
+.badge-post {
+    background-color: var(--primary);
+}
+
+.badge-delete {
+    background-color: var(--danger);
+}
+
+/* Ensure inputs and selects have consistent styling */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+select {
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    color: var(--text);
+    width: 100%;
+    max-width: 400px;
+}
+</style>
+
+
 {% endblock %}

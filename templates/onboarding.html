@@ -30,8 +30,22 @@
         </div>
         
         <form id="onboarding-form" method="POST" action="/onboarding/complete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <!-- Step 1: Cloudflare Settings -->
             <div class="onboarding-step" data-step="1" style="display: block;">
+                <div class="restore-section">
+                    <h4>Got a backup file?</h4>
+                    <p>You can restore your configuration from a JSON backup to skip the manual setup.</p>
+                    <div class="restore-input-group">
+                        <input type="file" id="onboarding_restore_file" accept=".json">
+                        <button type="button" class="btn btn-secondary" onclick="restoreOnboardingSettings()">⬆️ Restore &amp; Finish</button>
+                    </div>
+                </div>
+            
+                <div class="divider">
+                    <span>OR</span>
+                </div>
+
                 <h3>☁️ Cloudflare Settings</h3>
                 <p>Configure your Cloudflare API credentials for DNS management.</p>
                 
@@ -132,6 +146,27 @@
                         <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
                                value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
                                placeholder="External">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group)</label>
+                        <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
+                               value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
+                               placeholder="VLAN 50 Allowed IPs">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group)</label>
+                        <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
+                               value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
+                               placeholder="VLAN 50 Allowed Ports">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="TRAEFIK_LAN_CIDR">Traefik LAN CIDR (Excluded from IP List)</label>
+                        <input type="text" id="TRAEFIK_LAN_CIDR" name="TRAEFIK_LAN_CIDR" 
+                               value="{{ settings.get('TRAEFIK_LAN_CIDR', '') }}"
+                               placeholder="192.168.50.0/24">
                     </div>
                 </div>
             </div>
@@ -394,6 +429,51 @@ function toggleOnboardingHomeAssistant() {
         hassSettings.style.display = 'block';
     } else {
         hassSettings.style.display = 'none';
+    }
+}
+
+async function restoreOnboardingSettings() {
+    const fileInput = document.getElementById('onboarding_restore_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a backup file first.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const restoreResponse = await fetch('/api/settings/restore', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        });
+        
+        const data = await restoreResponse.json();
+        
+        if (restoreResponse.ok) {
+            // Mark onboarding as complete
+            const completeResponse = await fetch('/onboarding/complete', { 
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+            if (completeResponse.ok) {
+                alert('✅ ' + data.message + '\nSetup complete! Redirecting...');
+                window.location.href = '/';
+            } else {
+                alert('❌ Settings restored, but failed to finalize onboarding. Please reload.');
+            }
+        } else {
+            alert('❌ ' + (data.error || 'Restore failed'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
     }
 }
 

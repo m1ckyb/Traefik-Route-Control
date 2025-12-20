@@ -1,60 +1,147 @@
+// Helper to get CSRF token
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+}
+
 // Service control functions
+function updateServiceCard(card, data, enabled) {
+    // Update Badge
+    const badge = card.querySelector('.status-badge');
+    badge.className = 'status-badge'; // Reset classes
+    if (enabled) {
+        badge.classList.add('status-online');
+        badge.textContent = 'ONLINE';
+    } else {
+        badge.classList.add('status-offline');
+        badge.textContent = 'OFFLINE';
+    }
+
+    // Update URL Row
+    const urlRow = card.querySelector('.current-url-row');
+    const urlLink = card.querySelector('.url-link');
+    if (enabled && data.url) {
+        urlLink.href = data.url;
+        urlLink.textContent = data.url;
+        urlRow.style.display = 'flex';
+    } else {
+        urlRow.style.display = 'none';
+    }
+
+    // Update Regex Row
+    const regexRow = card.querySelector('.regex-row');
+    const regexCode = card.querySelector('.regex-pattern');
+    if (enabled && data.regex) {
+        regexCode.dataset.regex = data.regex;
+        regexCode.textContent = data.regex;
+        regexRow.style.display = 'flex';
+    } else {
+        regexRow.style.display = 'none';
+    }
+
+    // Update Actions
+    const actions = card.querySelector('.service-actions');
+    actions.style.display = enabled ? 'flex' : 'none';
+}
+
+function updateServiceHealthUI(serviceId, isHealthy, isOnline) {
+    const card = document.querySelector(`.service-card[data-service-id="${serviceId}"]`);
+    if (!card) return;
+
+    const badge = card.querySelector('.status-badge');
+    const slider = card.querySelector('.slider');
+
+    if (isOnline) {
+        if (isHealthy) {
+            badge.className = 'status-badge status-online';
+            badge.textContent = 'ONLINE';
+            slider.classList.remove('slider-error');
+        } else {
+            badge.className = 'status-badge status-error';
+            badge.textContent = 'UNHEALTHY';
+            slider.classList.add('slider-error');
+        }
+    } else {
+        badge.className = 'status-badge status-offline';
+        badge.textContent = 'OFFLINE';
+        slider.classList.remove('slider-error');
+    }
+}
+
 async function toggleService(serviceId, enable, event) {
     const action = enable ? 'on' : 'off';
     
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = enable ? '⏳ Enabling...' : '⏳ Disabling...';
+    const switchInput = event.target;
+    switchInput.disabled = true;
+    
+    // Find the parent service card to show a loading state
+    const serviceCard = switchInput.closest('.service-card');
+    serviceCard.classList.add('loading-state');
     
     try {
         const response = await fetch(`/api/services/${serviceId}/${action}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            // Show success toast notification
-            showNotification(data.message, 'success');
-            // Reload after a short delay to show the toast
-            setTimeout(() => window.location.reload(), 1000);
+            showToast(data.message, 'success');
+            updateServiceCard(serviceCard, data, enable);
+            switchInput.disabled = false;
+            
+            // Refresh firewall and health status in the UI
+            if (window.refreshStatus) {
+                window.refreshStatus();
+            }
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
-            btn.disabled = false;
-            btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            // Revert the switch state on failure
+            switchInput.checked = !enable;
+            switchInput.disabled = false;
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
-        btn.disabled = false;
-        btn.textContent = enable ? '🚀 Turn On' : '🛑 Turn Off';
+        showToast('Error: ' + error.message, 'error');
+        // Revert the switch state on failure
+        switchInput.checked = !enable;
+        switchInput.disabled = false;
+    } finally {
+        serviceCard.classList.remove('loading-state');
     }
 }
 
 async function rotateService(serviceId, event) {
     const btn = event.target;
+    const originalText = btn.textContent; // Save original text
     btn.disabled = true;
     btn.textContent = '⏳ Rotating...';
     
+    // Find service card
+    const serviceCard = btn.closest('.service-card');
+    
     try {
         const response = await fetch(`/api/services/${serviceId}/rotate`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
-            // Reload after a short delay to show the toast
-            setTimeout(() => window.location.reload(), 1000);
+            showToast(data.message, 'success');
+            updateServiceCard(serviceCard, data, true);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
-            btn.disabled = false;
-            btn.textContent = '🔄 Rotate URL';
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
+    } finally {
         btn.disabled = false;
-        btn.textContent = '🔄 Rotate URL';
+        btn.textContent = originalText;
     }
 }
 
@@ -64,20 +151,23 @@ async function deleteService(serviceId, serviceName) {
     
     try {
         const response = await fetch(`/api/services/${serviceId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             // Reload after a short delay to show the toast
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
@@ -97,13 +187,13 @@ async function diagnoseService(serviceId, event) {
         if (response.ok) {
             showDiagnosticsModal(data);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
         
         btn.disabled = false;
         btn.textContent = originalText;
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
         btn.disabled = false;
         btn.textContent = originalText;
     }
@@ -112,25 +202,30 @@ async function diagnoseService(serviceId, event) {
 async function repairService(serviceId) {
     try {
         const response = await fetch(`/api/services/${serviceId}/repair`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            showNotification(data.message, 'success');
+            showToast(data.message, 'success');
             // Close modal and reload after a short delay
             setTimeout(() => {
                 closeDiagnosticsModal();
                 window.location.reload();
             }, 1500);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error occurred'), 'error');
+            showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showToast('Error: ' + error.message, 'error');
     }
 }
+
+
 
 function showDiagnosticsModal(diagnostics) {
     const modal = document.getElementById('diagnosticsModal');
@@ -236,39 +331,76 @@ document.addEventListener('DOMContentLoaded', function() {
     if (copyHassConfigBtn) {
         copyHassConfigBtn.addEventListener('click', copyHassConfig);
     }
+    
+    // Attach event listener to Base URL input
+    const hassBaseUrlInput = document.getElementById('hass-base-url');
+    if (hassBaseUrlInput) {
+        hassBaseUrlInput.addEventListener('input', updateHassConfig);
+    }
 });
-
-// Show temporary notification
-function showNotification(message, type = 'success') {
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type}`;
-    notification.textContent = message;
-    notification.style.position = 'fixed';
-    notification.style.top = '20px';
-    notification.style.right = '20px';
-    notification.style.zIndex = '10000';
-    notification.style.minWidth = '250px';
-    notification.style.animation = 'slideIn 0.3s ease-out';
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
 
 // Home Assistant Modal functions
 function showHassModal(serviceId, serviceName) {
+    const modal = document.getElementById('hassModal');
+    
+    // Store context in modal dataset
+    modal.dataset.serviceId = serviceId;
+    modal.dataset.serviceName = serviceName;
+    
+    // Set default Base URL if empty
+    const baseUrlInput = document.getElementById('hass-base-url');
+    if (!baseUrlInput.value) {
+        baseUrlInput.value = window.location.origin;
+    }
+    
+    updateHassConfig();
+    
+    modal.style.display = 'block';
+}
+
+async function saveHassBaseUrl() {
+    const baseUrl = document.getElementById('hass-base-url').value.trim();
+    if (!baseUrl) {
+        showToast('Base URL cannot be empty', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                key: 'HASS_BASE_URL',
+                value: baseUrl
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast('Base URL saved as default', 'success');
+            updateHassConfig();
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function updateHassConfig() {
+    const modal = document.getElementById('hassModal');
+    const serviceId = modal.dataset.serviceId;
+    const serviceName = modal.dataset.serviceName;
+    const baseUrl = document.getElementById('hass-base-url').value.replace(/\/$/, ''); // Remove trailing slash
+    
     // Sanitize service name for YAML - remove special characters and normalize spaces
     const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const safeServiceName = serviceName.replace(/['"]/g, ''); // Remove quotes from display name
     
-    // Get the base URL from window location
-    const baseUrl = window.location.origin;
-    
     // Generate the Home Assistant YAML configuration
-    // Build the Jinja2 template string by concatenating parts to avoid template literal interpretation
     const jinjaOpen = '{{';
     const jinjaClose = '}}';
     
@@ -282,7 +414,6 @@ function showHassModal(serviceId, serviceName) {
     name: "traefik ${safeServiceName}"`;
     
     document.getElementById('hassConfig').textContent = hassConfig;
-    document.getElementById('hassModal').style.display = 'block';
 }
 
 function closeHassModal() {
@@ -313,9 +444,9 @@ function copyToClipboard(text, successMessage) {
     // Modern clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
-            showNotification(successMessage, 'success');
+            showToast(successMessage, 'success');
         }).catch(err => {
-            showNotification('Failed to copy: ' + err, 'error');
+            showToast('Failed to copy: ' + err, 'error');
         });
     } else {
         // Fallback for older browsers or non-HTTPS contexts
@@ -328,9 +459,9 @@ function copyToClipboard(text, successMessage) {
         
         try {
             document.execCommand('copy');
-            showNotification(successMessage, 'success');
+            showToast(successMessage, 'success');
         } catch (err) {
-            showNotification('Failed to copy: ' + err, 'error');
+            showToast('Failed to copy: ' + err, 'error');
         } finally {
             document.body.removeChild(textArea);
         }

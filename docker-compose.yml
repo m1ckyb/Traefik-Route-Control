@@ -1,6 +1,6 @@
 services:
-  jellyfin-rotator:
-    image: ghcr.io/m1ckyb/jellyfin_traefik_control:main
+  traefik-route-control:
+    image: ghcr.io/m1ckyb/traefik-route-control:0.0.13
     # Volume for persistent database storage
     volumes:
       - ./data:/app/data

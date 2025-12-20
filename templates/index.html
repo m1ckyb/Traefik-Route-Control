@@ -3,7 +3,13 @@
 {% block content %}
 <div class="header-row">
     <h2>Services</h2>
-    <a href="/services/new" class="btn btn-primary">+ Add Service</a>
+    <div class="header-actions">
+        <button id="check-health-btn" onclick="checkHealth(event)" class="btn btn-secondary" {% if not firewall_enabled %}disabled title="Firewall is closed"{% endif %}>Check Health</button>
+        <button id="rotate-port-btn" onclick="rotateAllPorts(event)" class="btn btn-warning" {% if not firewall_enabled %}disabled title="Firewall is closed"{% endif %}>Rotate Port</button>
+        <button onclick="showLogs()" class="btn btn-info">Logs</button>
+        <button id="global-toggle-btn" class="btn btn-secondary" style="display: none;">Global Power</button>
+        <a href="/services/new" class="btn btn-primary">+ Add Service</a>
+    </div>
 </div>
 
 {% if services %}
@@ -11,13 +17,31 @@
     {% for service in services %}
     <div class="service-card" data-service-id="{{ service.id }}">
         <div class="service-header">
-            <h3>{{ service.name }}</h3>
+            <div class="service-title-switch">
+                <div class="switch-75">
+                    <label class="switch">
+                        <input type="checkbox" {% if service.enabled %}checked{% endif %} onchange="toggleService({{ service.id }}, this.checked, event)">
+                        <span class="slider round {% if service.enabled and service.healthy == False %}slider-error{% endif %}"></span>
+                    </label>
+                </div>
+                <h3>{{ service.name }}</h3>
+            </div>
             <div class="service-header-right">
-                <span class="status-badge {% if service.enabled %}status-online{% else %}status-offline{% endif %}">
-                    {% if service.enabled %}ONLINE{% else %}OFFLINE{% endif %}
+                <span class="status-badge {% if service.enabled %}{% if service.healthy == False %}status-error{% else %}status-online{% endif %}{% else %}status-offline{% endif %}">
+                    {% if service.enabled %}
+                        {% if service.healthy == False %}UNHEALTHY{% else %}ONLINE{% endif %}
+                    {% else %}
+                        OFFLINE
+                    {% endif %}
                 </span>
+                <a href="/services/{{ service.id }}/edit" class="btn-icon" title="Edit Service">✏️</a>
+                {% if service.hass_entity_id %}
                 <button class="btn-icon" data-service-id="{{ service.id }}" data-service-name="{{ service.name }}" title="Home Assistant Settings">
-                    ⚙️
+                    🏠
+                </button>
+                {% endif %}
+                <button class="btn-icon btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)" title="Delete Service">
+                    🗑️
                 </button>
             </div>
         </div>
@@ -33,41 +57,30 @@
                 <strong>Target:</strong> <code>{{ service.target_url }}</code>
             </div>
             <div class="info-row">
-                <strong>Prefix:</strong> <code>{{ service.subdomain_prefix }}</code>
+                <strong>{% if service.random_suffix %}Prefix{% else %}Hostname{% endif %}:</strong> <code>{{ service.subdomain_prefix }}</code>
             </div>
-            {% if service.enabled and service.current_hostname %}
-            <div class="info-row">
+            <div class="info-row current-url-row" style="display: {% if service.enabled and service.current_hostname %}flex{% else %}none{% endif %}">
                 <strong>Current URL:</strong> 
-                <a href="https://{{ service.current_hostname }}" target="_blank" class="url-link">
-                    https://{{ service.current_hostname }}
+                <a href="{% if service.current_hostname %}https://{{ service.current_hostname }}{% else %}#{% endif %}" target="_blank" class="url-link">
+                    {% if service.current_hostname %}https://{{ service.current_hostname }}{% endif %}
                 </a>
             </div>
-            <div class="info-row">
+            <div class="info-row regex-row" style="display: {% if service.enabled and service.current_hostname %}flex{% else %}none{% endif %}">
                 <strong>Regex Pattern:</strong>
-                <code class="regex-pattern" data-regex="^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*$" title="Click to copy"></code>
+                <code class="regex-pattern" 
+                      data-regex="{% if service.current_hostname %}^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*${% endif %}" 
+                      title="Click to copy">
+                    {% if service.current_hostname %}^https:\/\/{{ service.subdomain_prefix }}-[a-z0-9]{8}\.{{ settings.get('DOMAIN_ROOT', 'example.com') | replace('.', '\.') }}.*${% endif %}
+                </code>
             </div>
-            {% endif %}
         </div>
         
-        <div class="service-actions">
-            {% if service.enabled %}
-            <button class="btn btn-warning" onclick="toggleService({{ service.id }}, false, event)">
-                🛑 Turn Off
-            </button>
+        <div class="service-actions" style="display: {% if service.enabled %}flex{% else %}none{% endif %}">
             <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
                 🔄 Rotate URL
             </button>
             <button class="btn btn-info" onclick="diagnoseService({{ service.id }}, event)">
                 🔍 Diagnose
-            </button>
-            {% else %}
-            <button class="btn btn-success" onclick="toggleService({{ service.id }}, true, event)">
-                🚀 Turn On
-            </button>
-            {% endif %}
-            <a href="/services/{{ service.id }}/edit" class="btn btn-secondary">✏️ Edit</a>
-            <button class="btn btn-danger" data-service-name="{{ service.name | e }}" onclick="deleteService({{ service.id }}, this.dataset.serviceName)">
-                🗑️ Delete
             </button>
         </div>
     </div>
@@ -89,6 +102,18 @@
         </div>
         <div class="modal-body">
             <p class="modal-info">Here's the configuration for Home Assistant to control this service:</p>
+            
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="hass-base-url" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Base URL (App Address)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="hass-base-url" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text);" value="{{ settings.get('HASS_BASE_URL', '') }}">
+                    <button type="button" class="btn btn-secondary" onclick="saveHassBaseUrl()">💾 Save</button>
+                </div>
+                <p class="help-text" style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.25rem;">
+                    Edit this if Home Assistant needs to connect via IP (e.g. <code>http://192.168.1.50:5000</code>) instead of domain.
+                </p>
+            </div>
+
             <div class="code-block">
                 <pre id="hassConfig"></pre>
             </div>
@@ -110,4 +135,185 @@
     </div>
 </div>
 
+<!-- Logs Modal -->
+<div id="logsModal" class="modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h3>System Logs</h3>
+            <span class="modal-close" onclick="closeLogsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="log-viewer" id="logContent">Loading logs...</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="fetchLogs()">Refresh</button>
+                <button class="btn btn-primary" onclick="closeLogsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.service-title-switch input[type="checkbox"]');
+    const btn = document.getElementById('global-toggle-btn');
+    
+    if (checkboxes.length > 0) {
+        btn.style.display = 'inline-block';
+        // Check if all services are currently enabled
+        const allOn = Array.from(checkboxes).every(cb => cb.checked);
+        
+        if (allOn) {
+            btn.textContent = 'Turn All Off';
+            btn.className = 'btn btn-danger';
+            btn.onclick = turnAllOff;
+        } else {
+            btn.textContent = 'Turn All On';
+            btn.className = 'btn btn-success';
+            btn.onclick = turnAllOn;
+        }
+    }
+});
+
+function turnAllOn() {
+    if (confirm('Are you sure you want to turn ON all services?')) {
+        fetch('/api/services/all/on', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (window.refreshStatus) window.refreshStatus();
+                window.location.reload();
+            });
+    }
+}
+
+function turnAllOff() {
+    if (confirm('Are you sure you want to turn OFF all services?')) {
+        fetch('/api/services/all/off', { 
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (window.refreshStatus) window.refreshStatus();
+                window.location.reload();
+            });
+    }
+}
+
+function checkHealth(event) {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Checking...';
+    btn.disabled = true;
+    
+    fetch('/api/health/check', { 
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast('Error: ' + data.error, 'error');
+            } else {
+                showToast('Health check completed', 'success');
+                
+                // data is now the result of get_status()
+                if (data.active_services) {
+                    data.active_services.forEach(svc => {
+                        updateServiceHealthUI(svc.id, svc.healthy, svc.status === 'ONLINE');
+                    });
+                }
+                
+                // For services that are OFFLINE (not in active_services)
+                document.querySelectorAll('.service-card').forEach(card => {
+                    const id = parseInt(card.dataset.serviceId);
+                    const isActive = data.active_services.some(svc => svc.id === id);
+                    if (!isActive) {
+                        updateServiceHealthUI(id, true, false);
+                    }
+                });
+            }
+        })
+        .catch(err => showToast('Request failed', 'error'))
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+}
+
+function rotateAllPorts(event) {
+    if (!confirm('Are you sure you want to rotate the firewall port for all services?')) return;
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Rotating...';
+    btn.disabled = true;
+    
+    fetch('/api/firewall/rotate', { 
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) showToast('Error: ' + data.error, 'error');
+            else {
+                showToast(data.message || 'Port rotated successfully', 'success');
+                // Reload to show the new port in status if applicable
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        })
+        .catch(err => showToast('Request failed', 'error'))
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+}
+
+function showLogs() {
+    document.getElementById('logsModal').style.display = 'block';
+    fetchLogs();
+}
+
+function closeLogsModal() {
+    document.getElementById('logsModal').style.display = 'none';
+}
+
+function fetchLogs() {
+    const logContent = document.getElementById('logContent');
+    
+    fetch('/api/logs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.logs) {
+                logContent.textContent = data.logs;
+                logContent.scrollTop = logContent.scrollHeight;
+            } else if (data.error) {
+                logContent.textContent = 'Error: ' + data.error;
+            }
+        });
+}
+</script>
+
+<style>
+.status-error {
+    background-color: #dc3545;
+    color: white;
+}
+.slider-error {
+    background-color: #dc3545 !important;
+}
+input:checked + .slider.slider-error {
+    background-color: #dc3545 !important;
+}
+</style>
 {% endblock %}

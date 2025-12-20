@@ -1,5 +1,5 @@
 # Use a lightweight Python base image
-FROM python:3.11-slim
+FROM python:alpine
 
 # Set environment variables to prevent python from writing pyc files
 # and to flush stdout/stderr immediately
@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application files
 COPY main.py .
 COPY database.py .
+COPY VERSION.txt .
 COPY templates templates/
 COPY static static/
 
