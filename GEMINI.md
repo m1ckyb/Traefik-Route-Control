@@ -1,7 +1,7 @@
-# Gemini Onboarding - Traefik Route Control
+# Gemini Onboarding - RouteGhost
 
 ## Project Overview
-**Traefik Route Control** is a Python/Flask application designed to securely expose local services (like Jellyfin, Sonarr, Radarr) to the internet temporarily. It uses a combination of:
+**RouteGhost** is a Python/Flask application designed to securely expose local services (like Jellyfin, Sonarr, Radarr) to the internet temporarily. It uses a combination of:
 - **Traefik** (via Redis provider) for dynamic routing.
 - **Cloudflare** for DNS records and Origin Rules (port rewrites).
 - **UniFi UDM Pro** for firewall control (opening/closing ports).

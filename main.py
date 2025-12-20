@@ -1002,10 +1002,9 @@ def send_discord_notification(message, title=None, color=None, webhook_url=None,
         "description": message,
         "color": color or 0x3498db,
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "footer": {
-            "text": f"Traefik Route Control v{version}"
-        }
-    }
+                        "footer": {
+                            "text": f"RouteGhost v{get_version()}"
+                        },    }
     
     if title:
         embed["title"] = title
@@ -1795,10 +1794,10 @@ def api_key_or_login_required(f):
     
     return decorated_function
 
-# RP (Relying Party) settings for WebAuthn
-RP_ID = os.environ.get('RP_ID', 'localhost')
-RP_NAME = "Traefik Route Control"
-ORIGIN = os.environ.get('ORIGIN', f'http://localhost:5000')
+# ================= AUTHENTICATION =================
+RP_ID = os.environ.get("RP_ID", "localhost")
+RP_NAME = "RouteGhost"
+ORIGIN = os.environ.get("ORIGIN", f"http://{RP_ID}:5000")
 
 def get_expected_origin():
     """
@@ -3289,10 +3288,10 @@ if __name__ == "__main__":
 
     if args.action == "status":
         s = get_status()
-        print(f"\n📊 SYSTEM STATUS")
+        print(f"👻 RouteGhost v{version} Status")
         print(f"🔥 Firewall: {s.get('firewall', 'UNKNOWN')}")
         print(f"📡 Public IP: {s.get('public_ip', 'Unknown')}")
-        print(f"🚦 Active Services: {s.get('active_count', 0)}/{s.get('total_services', 0)}")
+        print(f"👻 Active Services: {s.get('active_count', 0)}/{s.get('total_services', 0)}")
         if s.get('active_services'):
             print("\n🌐 Active Services:")
             for svc in s['active_services']:
