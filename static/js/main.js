@@ -92,9 +92,9 @@ async function toggleService(serviceId, enable, event) {
             updateServiceCard(serviceCard, data, enable);
             switchInput.disabled = false;
             
-            // Refresh firewall status in the UI (enables/disables buttons)
-            if (window.refreshFirewallStatus) {
-                window.refreshFirewallStatus();
+            // Refresh firewall and health status in the UI
+            if (window.refreshStatus) {
+                window.refreshStatus();
             }
         } else {
             showToast('Error: ' + (data.error || 'Unknown error occurred'), 'error');

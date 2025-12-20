@@ -146,32 +146,32 @@
     </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-    // Global function to refresh firewall status in the UI
-    window.refreshFirewallStatus = function() {
+    // Global function to refresh system status in the UI
+    window.refreshStatus = function() {
         const navFirewallStatus = document.getElementById('nav-firewall-status');
         if (!navFirewallStatus) return;
 
-        fetch('/api/firewall-status')
+        fetch('/api/status')
             .then(r => r.json())
             .then(data => {
-                let statusText = data.status;
-                let statusClass = `status-badge status-${data.status.toLowerCase()}`;
+                // Update Firewall Status in Navbar
+                let statusText = data.firewall;
+                let statusClass = `status-badge status-${data.firewall.toLowerCase()}`;
                 
-                // If firewall is open and port is available, show the port
-                if (data.status === 'OPEN' && data.port != null) {
-                    statusText = data.port;
-                } else if (data.status === 'CLOSED') {
+                if (data.firewall === 'OPEN' && data.firewall_port != null) {
+                    statusText = data.firewall_port;
+                } else if (data.firewall === 'CLOSED') {
                     statusText = 'Closed';
                 }
                 
                 navFirewallStatus.innerHTML = statusText;
                 navFirewallStatus.className = statusClass;
 
-                // Disable/Enable dashboard buttons if they exist
+                // Update Dashboard Buttons
                 const checkHealthBtn = document.getElementById('check-health-btn');
                 const rotatePortBtn = document.getElementById('rotate-port-btn');
                 if (checkHealthBtn && rotatePortBtn) {
-                    if (data.status === 'CLOSED') {
+                    if (data.firewall === 'CLOSED') {
                         checkHealthBtn.disabled = true;
                         checkHealthBtn.title = 'Firewall is closed';
                         rotatePortBtn.disabled = true;
@@ -183,6 +183,23 @@
                         rotatePortBtn.title = '';
                     }
                 }
+
+                // Update Service Health UI if function exists
+                if (window.updateServiceHealthUI && data.active_services) {
+                    // Update all services from data
+                    data.active_services.forEach(svc => {
+                        updateServiceHealthUI(svc.id, svc.healthy, svc.status === 'ONLINE');
+                    });
+                    
+                    // Mark others as offline
+                    document.querySelectorAll('.service-card').forEach(card => {
+                        const id = parseInt(card.dataset.serviceId);
+                        const isActive = data.active_services.some(svc => svc.id === id);
+                        if (!isActive) {
+                            updateServiceHealthUI(id, true, false);
+                        }
+                    });
+                }
             })
             .catch(err => {
                 navFirewallStatus.innerHTML = 'ERROR';
@@ -190,8 +207,11 @@
             });
     };
 
-    // Load firewall status on initial load
-    document.addEventListener('DOMContentLoaded', refreshFirewallStatus);
+    // Load status on initial load and every 30 seconds
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshStatus();
+        setInterval(refreshStatus, 30000);
+    });
     </script>
 </body>
 </html>

@@ -10,9 +10,11 @@
 - **UI/UX**: Enhanced disabled button styling with reduced opacity and saturation to provide better visual feedback when actions are unavailable.
 - **UI/UX**: Dynamic status updates: Toggling services now automatically updates the firewall status badge and enables/disables dashboard buttons without a page refresh.
 - **UI/UX**: Dynamic health updates: Clicking "Check Health" now updates service badges and slider colors immediately without a page refresh.
+- **UI/UX**: Background status polling: The dashboard now polls the server status every 30 seconds to automatically update firewall and health status indicators.
 - **License**: Switched project license from MIT to GNU Affero General Public License v3.0 (AGPLv3) to ensure continued open-source availability of modifications.
 
 ### Fixed
+- **Core**: Editing an active service now automatically synchronizes the new configuration with Redis and external APIs (DNS, Cloudflare) without requiring a toggle.
 - **Home Assistant Integration**: Fixed a bug where "None" would be rendered and saved in the Home Assistant Entity ID field when left empty.
 - **Authentication**: Fixed a bug where login and registration would fail due to missing CSRF tokens in AJAX requests.
 - **CSRF Protection**: Fixed "Request failed" errors on Dashboard (Check Health, Toggle All), Settings, and Onboarding pages by ensuring all AJAX requests include the required CSRF token.

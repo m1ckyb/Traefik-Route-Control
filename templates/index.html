@@ -184,7 +184,7 @@ function turnAllOn() {
         })
             .then(response => response.json())
             .then(data => {
-                if (window.refreshFirewallStatus) window.refreshFirewallStatus();
+                if (window.refreshStatus) window.refreshStatus();
                 window.location.reload();
             });
     }
@@ -200,7 +200,7 @@ function turnAllOff() {
         })
             .then(response => response.json())
             .then(data => {
-                if (window.refreshFirewallStatus) window.refreshFirewallStatus();
+                if (window.refreshStatus) window.refreshStatus();
                 window.location.reload();
             });
     }

@@ -1103,11 +1103,14 @@ def get_status():
     
     # Check UniFi Status
     firewall_status = "UNKNOWN"
+    firewall_port = None
     rule_info = check_unifi_rule()
-    if rule_info and rule_info["enabled"] is True:
-        firewall_status = "OPEN"
-    elif rule_info and rule_info["enabled"] is False:
-        firewall_status = "CLOSED"
+    if rule_info:
+        if rule_info["enabled"] is True:
+            firewall_status = "OPEN"
+        elif rule_info["enabled"] is False:
+            firewall_status = "CLOSED"
+        firewall_port = rule_info.get("port")
     
     # Get all services and their status
     services = db.get_all_services()
@@ -1131,6 +1134,7 @@ def get_status():
     
     return {
         "firewall": firewall_status,
+        "firewall_port": firewall_port,
         "active_services": active_services,
         "total_services": len(services),
         "active_count": len(active_services),
@@ -2492,6 +2496,12 @@ def edit_service(service_id):
                 hass_entity_id=hass_id,
                 random_suffix=random_suffix
             )
+            
+            # If service is active, refresh the external configuration (Redis, DNS, etc.)
+            if service.get('enabled'):
+                print(f"🔄 Service '{service['name']}' is active, refreshing configuration...")
+                turn_on_service(service_id, force=True)
+                
             flash('Service updated successfully!', 'success')
             return redirect(url_for('index'))
         except Exception as e:
