@@ -2439,13 +2439,19 @@ def new_service():
                 raise ValueError("Target URL must start with http:// or https://")
                 
             random_suffix = 1 if request.form.get('random_suffix') else 0
+            
+            # Clean hass_entity_id: strip whitespace and treat "None" as empty
+            hass_id = request.form.get('hass_entity_id', '').strip()
+            if not hass_id or hass_id.lower() == 'none':
+                hass_id = None
+
             db.add_service(
                 name=request.form['name'],
                 router_name=request.form['router_name'],
                 service_name=request.form['service_name'],
                 target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
-                hass_entity_id=request.form.get('hass_entity_id') or None,
+                hass_entity_id=hass_id,
                 random_suffix=random_suffix
             )
             flash('Service added successfully!', 'success')
@@ -2470,6 +2476,12 @@ def edit_service(service_id):
                 raise ValueError("Target URL must start with http:// or https://")
 
             random_suffix = 1 if request.form.get('random_suffix') else 0
+            
+            # Clean hass_entity_id: strip whitespace and treat "None" as empty
+            hass_id = request.form.get('hass_entity_id', '').strip()
+            if not hass_id or hass_id.lower() == 'none':
+                hass_id = None
+
             db.update_service(
                 service_id,
                 name=request.form['name'],
@@ -2477,7 +2489,7 @@ def edit_service(service_id):
                 service_name=request.form['service_name'],
                 target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
-                hass_entity_id=request.form.get('hass_entity_id') or None,
+                hass_entity_id=hass_id,
                 random_suffix=random_suffix
             )
             flash('Service updated successfully!', 'success')
