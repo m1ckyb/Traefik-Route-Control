@@ -78,7 +78,7 @@
         </div>
         
         <div class="service-actions" style="display: {% if service.enabled %}flex{% else %}none{% endif %}">
-            <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)">
+            <button class="btn btn-secondary" onclick="rotateService({{ service.id }}, event)" {% if service.random_suffix == 0 %}disabled title="Rotation is disabled for static subdomains"{% endif %}>
                 🔄 Rotate URL
             </button>
             <button class="btn btn-info" onclick="diagnoseService({{ service.id }}, event)">

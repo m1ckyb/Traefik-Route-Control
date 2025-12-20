@@ -17,6 +17,7 @@ import base64
 import hashlib
 import ipaddress
 import socket
+import re
 from functools import wraps
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context, make_response
@@ -188,6 +189,201 @@ def get_setting(key, required=True):
 # API Settings
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 5000))
+
+# ================= INPUT VALIDATION FUNCTIONS =================
+
+def validate_subdomain_prefix(prefix):
+    """Validate subdomain prefix for DNS safety.
+    
+    DNS label rules: alphanumeric and hyphens only, no leading/trailing hyphens.
+    Max 63 characters per label.
+    
+    Args:
+        prefix: The subdomain prefix to validate
+        
+    Returns:
+        str: Validated and normalized (lowercase) prefix
+        
+    Raises:
+        ValueError: If prefix is invalid
+    """
+    if not prefix:
+        raise ValueError("Subdomain prefix is required")
+    
+    prefix = prefix.strip()
+    
+    # DNS label rules: alphanumeric and hyphens only, no leading/trailing hyphens
+    # Pattern allows single character (e.g., 'a') or multiple with hyphens in middle
+    if not re.match(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$', prefix, re.IGNORECASE):
+        raise ValueError("Subdomain prefix must contain only letters, numbers, and hyphens (not at start/end)")
+    
+    if len(prefix) > 63:
+        raise ValueError("Subdomain prefix too long (max 63 characters)")
+    
+    return prefix.lower()
+
+def validate_router_name(name):
+    """Validate router name for Traefik/Redis safety.
+    
+    Args:
+        name: The router name to validate
+        
+    Returns:
+        str: Validated router name
+        
+    Raises:
+        ValueError: If name is invalid
+    """
+    if not name:
+        raise ValueError("Router name is required")
+    
+    name = name.strip()
+    
+    # Alphanumeric, hyphens, underscores only
+    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+        raise ValueError("Router name must contain only letters, numbers, hyphens, and underscores")
+    
+    if len(name) > 64:
+        raise ValueError("Router name too long (max 64 characters)")
+    
+    return name
+
+def validate_service_name(name):
+    """Validate service name for Traefik/Redis safety.
+    
+    Args:
+        name: The service name to validate
+        
+    Returns:
+        str: Validated service name
+        
+    Raises:
+        ValueError: If name is invalid
+    """
+    # Same rules as router name
+    if not name:
+        raise ValueError("Service name is required")
+    
+    name = name.strip()
+    
+    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+        raise ValueError("Service name must contain only letters, numbers, hyphens, and underscores")
+    
+    if len(name) > 64:
+        raise ValueError("Service name too long (max 64 characters)")
+    
+    return name
+
+def validate_display_name(name):
+    """Validate display name (more permissive than router/service names).
+    
+    Args:
+        name: The display name to validate
+        
+    Returns:
+        str: Validated display name
+        
+    Raises:
+        ValueError: If name is invalid
+    """
+    if not name:
+        raise ValueError("Display name is required")
+    
+    name = name.strip()
+    
+    if len(name) > 128:
+        raise ValueError("Display name too long (max 128 characters)")
+    
+    # Allow most characters for display, but ensure it's not empty after stripping
+    if not name:
+        raise ValueError("Display name cannot be empty or whitespace only")
+    
+    return name
+
+def validate_target_url(url):
+    """Validate target URL for security.
+    
+    Checks for:
+    - Valid HTTP/HTTPS scheme
+    - No credentials in URL
+    - Valid hostname
+    - Not link-local, loopback, or multicast addresses
+    
+    Note: This function resolves hostnames using IPv4 (socket.gethostbyname).
+    Hostnames that only resolve to IPv6 addresses will be rejected.
+    
+    Args:
+        url: The URL to validate
+        
+    Returns:
+        str: Validated URL
+        
+    Raises:
+        ValueError: If URL is invalid or potentially dangerous
+    """
+    if not url:
+        raise ValueError("Target URL is required")
+    
+    url = url.strip()
+    
+    if not url.startswith(('http://', 'https://')):
+        raise ValueError("Target URL must start with http:// or https://")
+    
+    try:
+        parsed = urlparse(url)
+        
+        if not parsed.netloc:
+            raise ValueError("Invalid URL format - missing hostname")
+        
+        # Check for credentials in URL (security risk)
+        if '@' in parsed.netloc:
+            raise ValueError("URLs with embedded credentials are not allowed for security reasons")
+        
+        # Extract hostname (handles IPv6)
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError("Invalid hostname in URL")
+        
+        # Resolve hostname to IP and check for dangerous address ranges
+        try:
+            # Use getaddrinfo to support both IPv4 and IPv6
+            # AF_UNSPEC allows both IPv4 and IPv6
+            # We only need one address, so take the first result
+            addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            if not addr_info:
+                raise ValueError(f"Cannot resolve hostname '{hostname}'")
+            
+            # Get the first IP address (format is (family, type, proto, canonname, sockaddr))
+            # sockaddr is a tuple (address, port) for AF_INET or (address, port, flowinfo, scopeid) for AF_INET6
+            ip_str = addr_info[0][4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
+            
+            # Block link-local (169.254.0.0/16, fe80::/10)
+            # These addresses are auto-assigned and shouldn't be used
+            if ip_obj.is_link_local:
+                raise ValueError("Link-local addresses (169.254.x.x, fe80::) are not allowed")
+            
+            # Block loopback (127.0.0.0/8, ::1)
+            # Prevents SSRF attacks against the RouteGhost server itself
+            if ip_obj.is_loopback:
+                raise ValueError("Loopback addresses (localhost, 127.x.x.x, ::1) are not allowed")
+            
+            # Block multicast
+            if ip_obj.is_multicast:
+                raise ValueError("Multicast addresses are not allowed")
+            
+            # Note: We allow private IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x, fd00::/8)
+            # because this application is designed to proxy to internal services
+                
+        except socket.gaierror:
+            raise ValueError(f"Cannot resolve hostname '{hostname}'")
+        
+        return url
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Invalid URL: {str(e)}")
 
 # ================= HELPER FUNCTIONS =================
 def get_redis():
@@ -2421,22 +2617,48 @@ def onboarding():
     settings = db.get_all_settings()
     return render_template('onboarding.html', settings=settings)
 
+# Whitelist of settings that can be modified via web UI
+# This prevents unauthorized modification of internal settings
+ALLOWED_USER_SETTINGS = {
+    'CF_API_TOKEN', 'CF_ZONE_ID', 'DOMAIN_ROOT', 'ORIGIN_RULE_NAME',
+    'REDIS_HOST', 'REDIS_PORT', 'REDIS_PASS',
+    'HASS_URL', 'HASS_TOKEN', 'HASS_ENABLED', 'HASS_ENTITY_ID',
+    'UNIFI_HOST', 'UNIFI_USER', 'UNIFI_PASS', 'UNIFI_RULE_NAME',
+    'FIREWALL_TYPE', 'UNIFI_IP_GROUP_NAME', 'UNIFI_PORT_GROUP_NAME',
+    'TRAEFIK_LAN_CIDR',
+    'HEALTH_CHECK_INTERVAL', 'HEALTH_CHECK_TIMEOUT',
+    'PORT_ROTATION_INTERVAL',
+    'DISCORD_WEBHOOK_URL', 'NOTIFY_EVENTS_HEALTH', 'NOTIFY_EVENTS_SYSTEM',
+    'ENFORCE_2FA',
+}
+
 @app.route('/onboarding/complete', methods=['POST'])
 @login_required
 def onboarding_complete():
     """Complete onboarding and save all settings"""
     try:
-        # Save all settings
+        # Only save whitelisted settings
+        saved_count = 0
+        rejected_count = 0
         for key in request.form:
-            db.set_setting(key, request.form[key])
+            if key in ALLOWED_USER_SETTINGS:
+                db.set_setting(key, request.form[key])
+                saved_count += 1
+            else:
+                print(f"⚠️ Security: Rejected attempt to set disallowed setting '{key}' via onboarding")
+                rejected_count += 1
         
         # Mark onboarding as completed
         db.update_user_onboarding_status(current_user.id, True)
         
-        flash('Setup completed successfully!', 'success')
+        if rejected_count > 0:
+            flash(f'Setup completed! Saved {saved_count} settings. ({rejected_count} invalid settings were ignored)', 'warning')
+        else:
+            flash('Setup completed successfully!', 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        flash(f'Error: {str(e)}', 'error')
+        print(f"⚠️ Unexpected error in onboarding_complete: {str(e)}")
+        flash('An unexpected error occurred during setup. Please try again.', 'error')
         return redirect(url_for('onboarding'))
 
 @app.route('/services/new', methods=['GET', 'POST'])
@@ -2444,9 +2666,12 @@ def onboarding_complete():
 def new_service():
     if request.method == 'POST':
         try:
-            target_url = request.form['target_url']
-            if not target_url.startswith(('http://', 'https://')):
-                raise ValueError("Target URL must start with http:// or https://")
+            # Validate all inputs
+            name = validate_display_name(request.form['name'])
+            router_name = validate_router_name(request.form['router_name'])
+            service_name = validate_service_name(request.form['service_name'])
+            target_url = validate_target_url(request.form['target_url'])
+            subdomain_prefix = validate_subdomain_prefix(request.form['subdomain_prefix'])
                 
             random_suffix = 1 if request.form.get('random_suffix') else 0
             show_regex = 1 if request.form.get('show_regex') else 0
@@ -2457,19 +2682,24 @@ def new_service():
                 hass_id = None
 
             db.add_service(
-                name=request.form['name'],
-                router_name=request.form['router_name'],
-                service_name=request.form['service_name'],
+                name=name,
+                router_name=router_name,
+                service_name=service_name,
                 target_url=target_url,
-                subdomain_prefix=request.form['subdomain_prefix'],
+                subdomain_prefix=subdomain_prefix,
                 hass_entity_id=hass_id,
                 random_suffix=random_suffix,
                 show_regex=show_regex
             )
             flash('Service added successfully!', 'success')
             return redirect(url_for('index'))
+        except ValueError as e:
+            # Expected validation errors - safe to show
+            flash(f'Validation Error: {str(e)}', 'error')
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
+            # Unexpected errors - log but don't expose details
+            print(f"⚠️ Unexpected error in new_service: {str(e)}")
+            flash('An unexpected error occurred while creating the service. Please check the logs.', 'error')
     
     return render_template('service_form.html', service=None)
 
@@ -2483,9 +2713,12 @@ def edit_service(service_id):
     
     if request.method == 'POST':
         try:
-            target_url = request.form['target_url']
-            if not target_url.startswith(('http://', 'https://')):
-                raise ValueError("Target URL must start with http:// or https://")
+            # Validate all inputs
+            name = validate_display_name(request.form['name'])
+            router_name = validate_router_name(request.form['router_name'])
+            service_name = validate_service_name(request.form['service_name'])
+            target_url = validate_target_url(request.form['target_url'])
+            subdomain_prefix = validate_subdomain_prefix(request.form['subdomain_prefix'])
 
             random_suffix = 1 if request.form.get('random_suffix') else 0
             show_regex = 1 if request.form.get('show_regex') else 0
@@ -2497,11 +2730,11 @@ def edit_service(service_id):
 
             db.update_service(
                 service_id,
-                name=request.form['name'],
-                router_name=request.form['router_name'],
-                service_name=request.form['service_name'],
+                name=name,
+                router_name=router_name,
+                service_name=service_name,
                 target_url=target_url,
-                subdomain_prefix=request.form['subdomain_prefix'],
+                subdomain_prefix=subdomain_prefix,
                 hass_entity_id=hass_id,
                 random_suffix=random_suffix,
                 show_regex=show_regex
@@ -2514,8 +2747,13 @@ def edit_service(service_id):
                 
             flash('Service updated successfully!', 'success')
             return redirect(url_for('index'))
+        except ValueError as e:
+            # Expected validation errors - safe to show
+            flash(f'Validation Error: {str(e)}', 'error')
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
+            # Unexpected errors - log but don't expose details
+            print(f"⚠️ Unexpected error in edit_service: {str(e)}")
+            flash('An unexpected error occurred while updating the service. Please check the logs.', 'error')
     
     return render_template('service_form.html', service=service)
 
@@ -2524,13 +2762,25 @@ def edit_service(service_id):
 def settings():
     if request.method == 'POST':
         try:
-            # Save all settings
+            # Only save whitelisted settings
+            saved_count = 0
+            rejected_count = 0
             for key in request.form:
-                db.set_setting(key, request.form[key])
-            flash('Settings saved successfully!', 'success')
+                if key in ALLOWED_USER_SETTINGS:
+                    db.set_setting(key, request.form[key])
+                    saved_count += 1
+                else:
+                    print(f"⚠️ Security: Rejected attempt to set disallowed setting '{key}' via settings page")
+                    rejected_count += 1
+            
+            if rejected_count > 0:
+                flash(f'Settings saved! Updated {saved_count} settings. ({rejected_count} invalid settings were ignored)', 'warning')
+            else:
+                flash('Settings saved successfully!', 'success')
             return redirect(url_for('settings'))
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
+            print(f"⚠️ Unexpected error in settings: {str(e)}")
+            flash('An unexpected error occurred while saving settings. Please try again.', 'error')
     
     settings = db.get_all_settings()
     

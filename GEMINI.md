@@ -30,6 +30,18 @@
 
 ## Development Guidelines
 
+### Security & Vulnerability Testing
+Every new feature or code change must be evaluated for security risks.
+- **CSRF Protection**: All new state-changing endpoints (POST, PUT, DELETE) **must** include `@login_required` (or API key auth) and ensure the `X-CSRFToken` header is checked and provided by the frontend.
+- **Input Validation**: Use `ipaddress` library for IPs, `urlparse` for URLs, and regex for subdomains. Never trust user input.
+- **Database**: Always use parameterized queries (e.g., `WHERE key = ?`). Never use string formatting for SQL.
+- **Permissions**: Ensure the app continues to run correctly as a non-root user. Test volume persistence using named volumes.
+- **Audit**: After significant changes, run a manual grep-based audit for hardcoded secrets or unsafe function usage (e.g., `shell=True`).
+
+### Infrastructure & Persistence
+- **Named Volumes**: Use the `routeghost_data` named volume for all persistent data. Avoid host-path mounts in production to prevent permission translation issues (especially on Windows/WSL2).
+- **Non-Root Execution**: The container must run as `appuser`. Use `PUID` and `PGID` environment variables to manage file ownership via the `entrypoint.sh` script.
+
 ### Database Migrations
 - The database schema is versioned in `database.py` inside `init_db()`.
 - When adding columns or tables, increment the schema version and add a migration block checking `current_version`.
@@ -43,11 +55,11 @@
 ### Configuration
 - Settings are stored in the `settings` table in SQLite.
 - Accessed via `db.get_setting(key)`.
-- Configured via the Web UI (`/settings`).
+- Configured via the Web UI (`/settings`) or the `/api/settings` endpoint.
 
 ### Logging
 - Logs are written to `app.log` in the `DATA_DIR`.
-- `sys.stdout` and `sys.stderr` are redirected to this log file using the `Tee` class in `main.py`.
+- Output is handled via the `Tee` class in `main.py` to ensure logs reach both the console and the log file.
 
 ### Error Handling
 - API endpoints should return JSON with `error` keys on failure.
@@ -123,7 +135,7 @@ When requested to "Make a dev release":
 
 1.  **Push to Dev**: Push the current code to the `dev` branch.
 
-When requested to "Make a release", where `<type>` is Patch, Minor, or Major, the following steps must be performed based on Semantic Versioning:
+When requested to "Make a release", where `<type>` is Patch, Minor, or Major, the following steps must be performed on the **`dev` branch** based on Semantic Versioning:
 
 1.  **Determine New Version**: Read the current version from `VERSION.txt` (e.g., X.Y.Z).
     - For a Patch release, the new version will be X.Y.(Z+1).
@@ -132,20 +144,21 @@ When requested to "Make a release", where `<type>` is Patch, Minor, or Major, th
 
 2.  **Update `CHANGELOG.md`**:
     - Create a new version heading with the new version number and current date (e.g., `## [1.0.0] - YYYY-MM-DD`).
-    - Move all content from `unreleased.md` into this new section.
-    - Ensure the formatting is correct and consistent with previous entries.
-    - Do not add an `[Unreleased]` section back to the top of `CHANGELOG.md`. This file should only contain released versions.
+    - Move **only** the content from `unreleased.md` that hasn't been released yet into this new section.
+    - **CRITICAL**: Ensure you do not duplicate entries already present in older versions of `CHANGELOG.md`.
+    - Do not add an `[Unreleased]` section back to the top of `CHANGELOG.md`.
 
-3.  **Clear `unreleased.md`**: After moving the content, reset `unreleased.md` to its default empty state, ready for the next development cycle.
+3.  **Clear `unreleased.md`**: After moving the content, reset `unreleased.md` to an empty state (or just the sub-headers) to prevent those changes from being included in the next release.
 
 4.  **Update `VERSION.txt`**: Change the content of `VERSION.txt` to the new version number.
 
-5.  **Update `docker-compose.yml`**: Update the image tags for the dashboard and worker services to the new version number.
+5.  **Update `docker-compose.yml`**: Update the image tags for the services to the new version number.
 
-6.  **Update `README.md` and `summary.md`**: Review both files to see if any of the new features or significant changes from the changelog need to be reflected in the project overview or feature list. Update them as necessary.
+6.  **Update Documentation**: Review `README.md` and other docs to reflect new features or significant changes.
 
-7.  **Pull Request**: Make a auto approve push-request to the `main` branch.
+7.  **Push to Dev**: Commit and push all release-related changes to the `dev` branch.
 
-8.  **GitHub Release**: Make a release, with the contents of the current version in the changelog.
+8.  **Merge to Main**: Checkout `main`, merge `dev`, and push to `origin main`.
 
-9.  **Pre-release**: Publish the current release as a pre-release.
+9.  **GitHub Release**: Use the `gh` CLI to create a release/pre-release on GitHub, using the notes extracted from the changelog.
+    - Command: `gh release create vX.Y.Z --title "vX.Y.Z - Description" --notes "content from changelog" --prerelease`
