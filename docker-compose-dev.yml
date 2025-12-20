@@ -1,8 +1,8 @@
 services:
-  traefik-route-control:
+  routeghost:
     build: .
-    image: traefik-route-control
-    container_name: traefik-route-control
+    image: routeghost
+    container_name: routeghost
     # Mount the .env file from the host to the container
     volumes:
       - ./data:/app/data

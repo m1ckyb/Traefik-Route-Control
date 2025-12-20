@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.16] - 2025-12-20
+
+### Changed
+- **Branding**: Renamed the project from "Traefik Route Control" to **RouteGhost** 👻 and updated all UI elements, documentation, and Docker configuration.
+
 ## [0.0.15] - 2025-12-20
 
 ### Fixed

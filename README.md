@@ -1,4 +1,4 @@
-# Traefik Route Control
+# RouteGhost 👻
 
 A security-focused Python application to temporarily expose local services (Jellyfin, Sonarr, etc.) to the internet using rotating subdomains, dynamic Traefik routing, and automated firewall control. Integrates with **Cloudflare**, **UniFi UDM Pro**, **Traefik (Redis)**, and **Home Assistant**.
 
@@ -18,12 +18,11 @@ A security-focused Python application to temporarily expose local services (Jell
 
 ### Docker Compose
 
-1.  **Clone and setup**:
-    ```bash
-    git clone https://github.com/m1ckyb/Jellyfin_Traefik_Control.git
-    cd Jellyfin_Traefik_Control
-    mkdir -p data
-    ```
+1. Clone the repository:
+```bash
+git clone https://github.com/m1ckyb/RouteGhost.git
+cd RouteGhost
+```
 
 2.  **Run**:
     ```bash
