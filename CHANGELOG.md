@@ -68,7 +68,7 @@ All notable changes to this project will be documented in this file.
 - **UI/UX**: Reorganized Settings page into a tabbed interface.
 - **UI/UX**: Added Dark Mode toggle and Backup/Restore functionality.
 
-## [0.1.0] - Initial Release
+## [0.0.1] - Initial Release
 - Basic Traefik route rotation.
 - Cloudflare DNS and Origin Rule integration.
 - UniFi Firewall integration.

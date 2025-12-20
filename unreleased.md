@@ -1,3 +1,7 @@
 ### Changed
 - **UI/UX**: The "Rotate URL" button is now automatically disabled for services that have "Randomize Suffix" turned off, as static subdomains do not support rotation.
+- **Documentation**: Refined the release process instructions in `GEMINI.md` to prevent changelog duplication and clarify the branch merge workflow.
+- **Documentation**: Updated `GEMINI.md` with modern development guidelines including non-root execution, named volume usage, and mandatory security/vulnerability testing for new code changes.
+
+### Fixed
 - **Docker**: Cleaned up `entrypoint.sh` startup logs to remove verbose diagnostic information.
