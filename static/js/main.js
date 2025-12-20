@@ -29,13 +29,15 @@ function updateServiceCard(card, data, enabled) {
 
     // Update Regex Row
     const regexRow = card.querySelector('.regex-row');
-    const regexCode = card.querySelector('.regex-pattern');
-    if (enabled && data.regex) {
-        regexCode.dataset.regex = data.regex;
-        regexCode.textContent = data.regex;
-        regexRow.style.display = 'flex';
-    } else {
-        regexRow.style.display = 'none';
+    if (regexRow) {
+        const regexCode = card.querySelector('.regex-pattern');
+        if (enabled && data.regex) {
+            regexCode.dataset.regex = data.regex;
+            regexCode.textContent = data.regex;
+            regexRow.style.display = 'flex';
+        } else {
+            regexRow.style.display = 'none';
+        }
     }
 
     // Update Actions

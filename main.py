@@ -1403,18 +1403,21 @@ def turn_on_service(service_id, force=False):
     if service.get('enabled') and not force:
         print(f"ℹ️ {service['name']} is already online. Ignoring request.")
         
-        domain_root = get_setting("DOMAIN_ROOT")
-        regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
-        if domain_root:
-            regex_pattern += domain_root.replace('.', '\\.')
-        regex_pattern += ".*$"
-        
-        return {
+        response = {
             "message": f"{service['name']} is already online",
             "url": f"https://{service.get('current_hostname')}",
-            "port": service.get('current_port'),
-            "regex": regex_pattern
+            "port": service.get('current_port')
         }
+
+        if service.get('show_regex', 1):
+            domain_root = get_setting("DOMAIN_ROOT")
+            regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
+            if domain_root:
+                regex_pattern += domain_root.replace('.', '\\.')
+            regex_pattern += ".*$"
+            response["regex"] = regex_pattern
+        
+        return response
     
     print(f"\n🚀 === ENABLING {service['name']} ===")
     
@@ -1624,20 +1627,24 @@ def turn_on_service(service_id, force=False):
         print(f"⚠️ Port verification failed: {error_msg}")
         port_status = "unverified"
 
-    # Generate regex pattern for UI
-    regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
-    if domain_root:
-        regex_pattern += domain_root.replace('.', '\\.')
-    regex_pattern += ".*$"
-
     print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname} (Port: {random_port})\n")
-    return {
+    
+    response = {
         "message": f"{service['name']} enabled successfully", 
         "url": f"https://{full_hostname}", 
         "port": random_port,
-        "port_status": port_status,
-        "regex": regex_pattern
+        "port_status": port_status
     }
+
+    if service.get('show_regex', 1):
+        # Generate regex pattern for UI
+        regex_pattern = f"^https:\\/\\/{service['subdomain_prefix']}-[a-z0-9]{{8}}\\."
+        if domain_root:
+            regex_pattern += domain_root.replace('.', '\\.')
+        regex_pattern += ".*$"
+        response["regex"] = regex_pattern
+
+    return response
 
 def rotate_service(service_id):
     """Rotate URL for a service (turn off then on)"""
@@ -2443,6 +2450,7 @@ def new_service():
                 raise ValueError("Target URL must start with http:// or https://")
                 
             random_suffix = 1 if request.form.get('random_suffix') else 0
+            show_regex = 1 if request.form.get('show_regex') else 0
             
             # Clean hass_entity_id: strip whitespace and treat "None" as empty
             hass_id = request.form.get('hass_entity_id', '').strip()
@@ -2456,7 +2464,8 @@ def new_service():
                 target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
                 hass_entity_id=hass_id,
-                random_suffix=random_suffix
+                random_suffix=random_suffix,
+                show_regex=show_regex
             )
             flash('Service added successfully!', 'success')
             return redirect(url_for('index'))
@@ -2480,6 +2489,7 @@ def edit_service(service_id):
                 raise ValueError("Target URL must start with http:// or https://")
 
             random_suffix = 1 if request.form.get('random_suffix') else 0
+            show_regex = 1 if request.form.get('show_regex') else 0
             
             # Clean hass_entity_id: strip whitespace and treat "None" as empty
             hass_id = request.form.get('hass_entity_id', '').strip()
@@ -2494,7 +2504,8 @@ def edit_service(service_id):
                 target_url=target_url,
                 subdomain_prefix=request.form['subdomain_prefix'],
                 hass_entity_id=hass_id,
-                random_suffix=random_suffix
+                random_suffix=random_suffix,
+                show_regex=show_regex
             )
             
             # If service is active, refresh the external configuration (Redis, DNS, etc.)
