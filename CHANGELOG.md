@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.15] - 2025-12-20
+
+### Fixed
+- **UI**: Fixed a bug where the Regex Pattern was still visible on the dashboard even when "Show Regex Pattern" was disabled for the service.
+
 ## [0.0.14] - 2025-12-20
 
 ### Added
