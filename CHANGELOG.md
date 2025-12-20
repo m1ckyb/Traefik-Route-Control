@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.18] - 2025-12-21
+
+### Added
+- **Documentation**: Created comprehensive security review document (`SECURITY/COPILOT_SECURITY_REVIEW_DEC_21_2025.md`) and executive summary.
+- **API**: Added robust validation functions for subdomains, router names, service names, and target URLs.
+- **API**: Implemented `ALLOWED_USER_SETTINGS` whitelist to prevent unauthorized configuration changes.
+
+### Changed
+- **Security**: Implemented strict SSRF protection in URL validation, blocking loopback and link-local addresses.
+- **Security**: Hardened flash message rendering against XSS using Jinja's `tojson` filter.
+- **Security**: Improved error handling to prevent sensitive information disclosure in user-facing messages.
+
 ## [0.0.17] - 2025-12-20
 
 ### Changed
