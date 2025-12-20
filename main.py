@@ -213,8 +213,8 @@ def validate_subdomain_prefix(prefix):
     prefix = prefix.strip()
     
     # DNS label rules: alphanumeric and hyphens only, no leading/trailing hyphens
-    # Max 63 characters per label
-    if not re.match(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', prefix, re.IGNORECASE):
+    # Pattern allows single character (e.g., 'a') or multiple with hyphens in middle
+    if not re.match(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$', prefix, re.IGNORECASE):
         raise ValueError("Subdomain prefix must contain only letters, numbers, and hyphens (not at start/end)")
     
     if len(prefix) > 63:
@@ -287,16 +287,16 @@ def validate_display_name(name):
         ValueError: If name is invalid
     """
     if not name:
-        raise ValueError("Service name is required")
+        raise ValueError("Display name is required")
     
     name = name.strip()
     
     if len(name) > 128:
-        raise ValueError("Service name too long (max 128 characters)")
+        raise ValueError("Display name too long (max 128 characters)")
     
     # Allow most characters for display, but ensure it's not empty after stripping
     if not name:
-        raise ValueError("Service name cannot be empty or whitespace only")
+        raise ValueError("Display name cannot be empty or whitespace only")
     
     return name
 
@@ -308,6 +308,9 @@ def validate_target_url(url):
     - No credentials in URL
     - Valid hostname
     - Not link-local, loopback, or multicast addresses
+    
+    Note: This function resolves hostnames using IPv4 (socket.gethostbyname).
+    Hostnames that only resolve to IPv6 addresses will be rejected.
     
     Args:
         url: The URL to validate
@@ -343,24 +346,33 @@ def validate_target_url(url):
         
         # Resolve hostname to IP and check for dangerous address ranges
         try:
-            ip = socket.gethostbyname(hostname)
-            ip_obj = ipaddress.ip_address(ip)
+            # Use getaddrinfo to support both IPv4 and IPv6
+            # AF_UNSPEC allows both IPv4 and IPv6
+            # We only need one address, so take the first result
+            addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            if not addr_info:
+                raise ValueError(f"Cannot resolve hostname '{hostname}'")
+            
+            # Get the first IP address (format is (family, type, proto, canonname, sockaddr))
+            # sockaddr is a tuple (address, port) for AF_INET or (address, port, flowinfo, scopeid) for AF_INET6
+            ip_str = addr_info[0][4][0]
+            ip_obj = ipaddress.ip_address(ip_str)
             
             # Block link-local (169.254.0.0/16, fe80::/10)
             # These addresses are auto-assigned and shouldn't be used
             if ip_obj.is_link_local:
-                raise ValueError("Link-local addresses (169.254.x.x) are not allowed")
+                raise ValueError("Link-local addresses (169.254.x.x, fe80::) are not allowed")
             
             # Block loopback (127.0.0.0/8, ::1)
             # Prevents SSRF attacks against the RouteGhost server itself
             if ip_obj.is_loopback:
-                raise ValueError("Loopback addresses (localhost, 127.x.x.x) are not allowed")
+                raise ValueError("Loopback addresses (localhost, 127.x.x.x, ::1) are not allowed")
             
             # Block multicast
             if ip_obj.is_multicast:
                 raise ValueError("Multicast addresses are not allowed")
             
-            # Note: We allow private IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+            # Note: We allow private IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x, fd00::/8)
             # because this application is designed to proxy to internal services
                 
         except socket.gaierror:
