@@ -102,6 +102,10 @@ When working on this project, assume the user wants robust, production-ready cod
 
 ## Release Process
 
+When requested to "Make a dev release":
+
+1.  **Push to Dev**: Push the current code to the `dev` branch.
+
 When requested to "Make a release", where `<type>` is Patch, Minor, or Major, the following steps must be performed based on Semantic Versioning:
 
 1.  **Determine New Version**: Read the current version from `VERSION.txt` (e.g., X.Y.Z).
@@ -122,3 +126,9 @@ When requested to "Make a release", where `<type>` is Patch, Minor, or Major, th
 5.  **Update `docker-compose.yml`**: Update the image tags for the dashboard and worker services to the new version number.
 
 6.  **Update `README.md` and `summary.md`**: Review both files to see if any of the new features or significant changes from the changelog need to be reflected in the project overview or feature list. Update them as necessary.
+
+7.  **Pull Request**: Make a auto approve push-request to the `main` branch.
+
+8.  **GitHub Release**: Make a release, with the contents of the current version in the changelog.
+
+9.  **Pre-release**: Publish the current release as a pre-release.

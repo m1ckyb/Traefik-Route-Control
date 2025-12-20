@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.13] - 2025-12-20
+
+### Changed
+- Streamlined `README.md` for better readability and conciseness.
+- Updated `GEMINI.md` Release Process section to include dev release workflow and expanded release steps (PR, GitHub Release, Pre-release).
+
 ## [0.0.12] - 2025-12-19
 
 ### Added
