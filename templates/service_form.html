@@ -60,6 +60,19 @@
         </div>
         
         <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="show_regex">Show Regex Pattern</label>
+                <div class="switch-75">
+                    <label class="switch">
+                        <input type="checkbox" id="show_regex" name="show_regex" {% if not service or service.show_regex != 0 %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <small>If enabled, displays the matching Regex pattern on the dashboard when the service is active.</small>
+        </div>
+
+        <div class="form-group">
             <label for="hass_entity_id">Home Assistant Entity ID (optional)</label>
             <input type="text" id="hass_entity_id" name="hass_entity_id" 
                    value="{{ service.hass_entity_id if service and service.hass_entity_id else '' }}"

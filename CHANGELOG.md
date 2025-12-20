@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.14] - 2025-12-20
+
+### Added
+- **Service Configuration**: Added "Show Regex Pattern" toggle to service edit page, allowing users to control whether the regex pattern is displayed on the dashboard for that service.
+
 ## [0.0.13] - 2025-12-20
 
 ### Changed
