@@ -29,7 +29,7 @@
                 <script>
                     document.addEventListener('DOMContentLoaded', function() {
                         {% for category, message in messages %}
-                            showToast("{{ message }}", "{{ category }}");
+                            showToast({{ message|tojson }}, {{ category|tojson }});
                         {% endfor %}
                     });
                 </script>
