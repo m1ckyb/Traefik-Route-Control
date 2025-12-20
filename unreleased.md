@@ -5,6 +5,7 @@
 ### Changed
 - **Branding**: Renamed the project from "Traefik Route Control" to **RouteGhost** 👻 and updated all UI elements, documentation, and Docker configuration.
 - **Security**: Updated Docker image to run as a non-root user (`appuser`) with configurable UID/GID (`PUID`/`PGID`), improving container security and host file system compatibility.
+- **Infrastructure**: Switched from host-mounted directories to **Named Docker Volumes** (`routeghost_data`) for the `/app/data` directory. This resolves SQLite "readonly database" errors and permission issues specifically encountered when running via WSL2 on Windows host mounts.
 - **UI/UX**: Added a "Save" button to the Base URL field in the Home Assistant Settings modal, allowing users to persist their preferred application address for Home Assistant configuration.
 - **UI/UX**: Added an editable "Base URL" field to the Home Assistant Settings modal, allowing users to easily customize the API address (e.g., using an IP address instead of a domain) in the generated YAML configuration.
 - **UI/UX**: Replaced the numeric input for "Port Rotation Interval" with a dropdown menu featuring 30-minute increments up to 8 hours for better usability.

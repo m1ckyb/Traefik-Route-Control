@@ -6,7 +6,7 @@ services:
       - PGID=1000
     # Volume for persistent database storage
     volumes:
-      - ./data:/app/data
+      - routeghost_data:/app/data
     # Expose the port for the web UI and API
     ports:
       - "5000:5000"
@@ -14,3 +14,6 @@ services:
     # If Redis is on a different server, you can remove this line.
     pull_policy: always
     restart: unless-stopped
+
+volumes:
+  routeghost_data:

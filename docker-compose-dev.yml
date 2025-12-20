@@ -10,9 +10,9 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-    # Mount the .env file from the host to the container
+    # Mount the data volume
     volumes:
-      - ./data:/app/data
+      - routeghost_data:/app/data
     # Expose the port for the API server
     ports:
       - "5000:5000"
@@ -20,3 +20,6 @@ services:
     # If Redis is on a different server, you can remove this line.
     #network_mode: host
     # Default command to run the API server
+
+volumes:
+  routeghost_data:
