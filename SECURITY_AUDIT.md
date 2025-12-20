@@ -28,10 +28,10 @@ A security assessment was performed on the codebase.
     - CSRF protection (`Flask-WTF`) is enabled globally and applied to AJAX requests.
 
 ### 4. Container Security
-- **Status**: ⚠️ **Improvement Needed**
+- **Status**: ✅ **Secure**
 - **Details**:
-    - **User**: The Docker container runs as `root` (default behavior).
-    - **Recommendation**: Update `Dockerfile` to create and switch to a non-root user (e.g., `appuser`) to limit the impact of a potential container breakout.
+    - **User**: The Docker container runs as a non-root user (`appuser`).
+    - **Permissions**: Ownership of the application and data directories is restricted to the `appuser`.
 
 ### 5. Network Security
 - **Status**: ℹ️ **Note**

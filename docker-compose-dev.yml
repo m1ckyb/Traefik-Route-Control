@@ -1,8 +1,15 @@
 services:
   routeghost:
-    build: .
+    build:
+      context: .
+      args:
+        - PUID=1000
+        - PGID=1000
     image: routeghost
     container_name: routeghost
+    environment:
+      - PUID=1000
+      - PGID=1000
     # Mount the .env file from the host to the container
     volumes:
       - ./data:/app/data

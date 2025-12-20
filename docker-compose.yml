@@ -1,6 +1,9 @@
 services:
   routeghost:
     image: ghcr.io/m1ckyb/routeghost:0.0.16
+    environment:
+      - PUID=1000
+      - PGID=1000
     # Volume for persistent database storage
     volumes:
       - ./data:/app/data
