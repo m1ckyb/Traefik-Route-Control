@@ -84,6 +84,15 @@ Authenticate via browser session or `X-API-Key` header.
                +-> [Home Assistant]
 ```
 
+## 📁 Data Persistence
+
+All configuration is stored in an SQLite database at `/app/data/config.db` inside the container. RouteGhost uses **Named Docker Volumes** (`routeghost_data`) by default to ensure reliability and performance, especially when running on Windows via WSL2.
+
+```yaml
+volumes:
+  routeghost_data:
+```
+
 ## 📄 License
 
 This project is open source and available under the **GNU Affero General Public License v3.0 (AGPLv3)**.
