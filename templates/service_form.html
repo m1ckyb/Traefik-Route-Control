@@ -40,36 +40,38 @@
             <small>Internal URL where the service is accessible</small>
         </div>
         
-        <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label for="subdomain_prefix" id="prefix-label">Subdomain Prefix</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.85rem; color: var(--text-dim);">Randomize Suffix <span class="tooltip-icon" data-tooltip="If enabled, appends a random string to the prefix. If disabled, uses the prefix as the exact subdomain.">ℹ️</span></span>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 300px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="subdomain_prefix" id="prefix-label">Subdomain Prefix</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.85rem; color: var(--text-dim);">Randomize Suffix <span class="tooltip-icon" data-tooltip="If enabled, appends a random string to the prefix. If disabled, uses the prefix as the exact subdomain.">ℹ️</span></span>
+                        <div class="switch-75">
+                            <label class="switch">
+                                <input type="checkbox" id="random_suffix" name="random_suffix" {% if not service or service.random_suffix != 0 %}checked{% endif %} onchange="updatePrefixHelp()">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <input type="text" id="subdomain_prefix" name="subdomain_prefix" required 
+                       value="{{ service.subdomain_prefix if service else '' }}"
+                       placeholder="jf" maxlength="63">
+                <small id="prefix-help">Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
+            </div>
+            
+            <div class="form-group" style="flex: 1; min-width: 300px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="show_regex">Show Regex Pattern</label>
                     <div class="switch-75">
                         <label class="switch">
-                            <input type="checkbox" id="random_suffix" name="random_suffix" {% if not service or service.random_suffix != 0 %}checked{% endif %} onchange="updatePrefixHelp()">
+                            <input type="checkbox" id="show_regex" name="show_regex" {% if not service or service.show_regex != 0 %}checked{% endif %}>
                             <span class="slider round"></span>
                         </label>
                     </div>
                 </div>
+                <small>If enabled, displays the matching Regex pattern on the dashboard when the service is active.</small>
             </div>
-            <input type="text" id="subdomain_prefix" name="subdomain_prefix" required 
-                   value="{{ service.subdomain_prefix if service else '' }}"
-                   placeholder="jf" maxlength="63">
-            <small id="prefix-help">Short prefix for rotating subdomains (e.g., 'jf' creates jf-abc123.domain.com)</small>
-        </div>
-        
-        <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label for="show_regex">Show Regex Pattern</label>
-                <div class="switch-75">
-                    <label class="switch">
-                        <input type="checkbox" id="show_regex" name="show_regex" {% if not service or service.show_regex != 0 %}checked{% endif %}>
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-            </div>
-            <small>If enabled, displays the matching Regex pattern on the dashboard when the service is active.</small>
         </div>
 
         <div class="form-group">
