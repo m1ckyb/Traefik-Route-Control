@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.20] - 2025-12-21
+
+### Added
+- **Docker**: Configurable timezone support in the Docker container via `TZ` environment variable.
+- **Logging**: Application logs now include local timestamps with timezone offset for better readability.
+
 ## [0.0.19] - 2025-12-21
 
 ### Added
