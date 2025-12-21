@@ -20,7 +20,7 @@ import socket
 import re
 from functools import wraps
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context, make_response
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, session, has_request_context, make_response, g
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -1381,13 +1381,20 @@ def get_service_status(service_id):
             "service": service
         }
 
-def turn_off_service(service_id):
+def turn_off_service(service_id, actor=None):
     """Turn off a specific service"""
     service = db.get_service(service_id)
     if not service:
         return {"error": "Service not found"}
     
-    print(f"\n🛑 === SHUTTING DOWN {service['name']} ===")
+    # Identify the actor (WebUI user, API Key, or Background Task)
+    if not actor:
+        if has_request_context() and hasattr(g, 'actor'):
+            actor = g.actor
+        else:
+            actor = "Background Task"
+
+    print(f"\n🛑 === ({actor}) SHUTTING DOWN {service['name']} ===")
     r = get_redis()
     if not r:
         return {"error": "Redis connection failed"}
@@ -1589,14 +1596,21 @@ def rotate_firewall_port():
     print("✅ Firewall port rotated successfully.")
     return {"success": True, "port": new_port}
 
-def turn_on_service(service_id, force=False):
+def turn_on_service(service_id, force=False, actor=None):
     """Turn on a specific service"""
     service = db.get_service(service_id)
     if not service:
         return {"error": "Service not found"}
     
+    # Identify the actor (WebUI user, API Key, or Background Task)
+    if not actor:
+        if has_request_context() and hasattr(g, 'actor'):
+            actor = g.actor
+        else:
+            actor = "Background Task"
+
     if service.get('enabled') and not force:
-        print(f"ℹ️ {service['name']} is already online. Ignoring request.")
+        print(f"ℹ️ ({actor}) {service['name']} is already online. Ignoring request.")
         
         response = {
             "message": f"{service['name']} is already online",
@@ -1614,7 +1628,7 @@ def turn_on_service(service_id, force=False):
         
         return response
     
-    print(f"\n🚀 === ENABLING {service['name']} ===")
+    print(f"\n🚀 === ({actor}) ENABLING {service['name']} ===")
     
     # Check if any other service is already enabled and get its port
     # All active services share the same firewall port
@@ -1970,6 +1984,8 @@ def api_key_or_login_required(f):
             if key_data:
                 # Update last used timestamp
                 db.update_api_key_last_used(key_hash)
+                # Set actor name for logging
+                g.actor = f"API Key: {key_data['name']}"
                 # Continue with the request
                 return f(*args, **kwargs)
             else:
@@ -1978,6 +1994,8 @@ def api_key_or_login_required(f):
         
         # No API key, check for session-based authentication
         if current_user.is_authenticated:
+            # Set actor name for logging
+            g.actor = f"User: {current_user.username}"
             return f(*args, **kwargs)
         
         # Neither authentication method succeeded
@@ -3351,29 +3369,37 @@ def api_save_setting():
 @app.route('/api/test/redis', methods=['POST'])
 @login_required
 def api_test_redis():
-    """Test Redis connection with provided credentials."""
-    data = request.get_json(silent=True) or {}
+    data = request.get_json()
     host = data.get('host')
     port = data.get('port')
     password = data.get('password')
     
-    if not host or not port:
-        return jsonify({"error": "Host and Port are required"}), 400
-        
     try:
-        r = redis.Redis(
-            host=host, 
-            port=int(port), 
-            password=password if password else None, 
-            socket_connect_timeout=5,
-            socket_timeout=5
-        )
-        if r.ping():
-            return jsonify({"success": True, "message": "Redis connection successful!"})
-        else:
-            return jsonify({"error": "Redis ping failed"}), 400
+        r = redis.Redis(host=host, port=port, password=password, socket_timeout=5)
+        r.ping()
+        return jsonify({"message": "Redis connection successful!"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/redis/clear', methods=['POST'])
+@login_required
+def api_clear_redis_routes():
+    """Clear all Traefik route entries from Redis."""
+    r = get_redis()
+    if not r:
+        return jsonify({"error": "Redis connection failed"}), 500
+    
+    try:
+        # Find all keys starting with traefik/
+        keys = r.keys("traefik/*")
+        if keys:
+            # redis-py delete needs positional arguments
+            r.delete(*keys)
+            return jsonify({"message": f"Successfully cleared {len(keys)} Traefik entries from Redis"})
+        else:
+            return jsonify({"message": "No Traefik entries found in Redis"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/test/hass', methods=['POST'])
 @login_required
