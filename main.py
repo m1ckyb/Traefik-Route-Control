@@ -6,6 +6,7 @@ import threading
 import string
 import os
 import sys
+import builtins
 import argparse
 import urllib3
 from urllib.parse import urlparse
@@ -77,6 +78,32 @@ try:
     sys.stderr = Tee(sys.stderr, log_file_handle)
 except Exception as e:
     print(f"⚠️ Failed to setup logging: {e}")
+
+# Override print to include timestamps
+original_print = builtins.print
+def timestamped_print(*args, **kwargs):
+    file = kwargs.get('file', sys.stdout)
+    # Only add timestamp if printing to stdout/stderr (which are Tee objects)
+    if file in (sys.stdout, sys.stderr):
+        try:
+            ts = datetime.now().astimezone().strftime("[%Y-%m-%d %H:%M:%S %z]")
+        except Exception:
+            # Fallback if astimezone fails
+            ts = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        
+        sep = kwargs.get('sep', ' ')
+        msg = sep.join(map(str, args))
+        # Remove sep from kwargs as we handled it, to avoid double separator usage if we were passing multiple args
+        # But we are passing a single string, so sep is ignored by print for the content, 
+        # but we should keep it in kwargs if print uses it? print(obj, sep=...) 
+        # Actually print(single_obj, sep=...) sep is unused.
+        
+        original_print(f"{ts} {msg}", **kwargs)
+    else:
+        original_print(*args, **kwargs)
+
+builtins.print = timestamped_print
+
 # ---------------------
 
 # Suppress InsecureRequestWarning for UniFi self-signed certs

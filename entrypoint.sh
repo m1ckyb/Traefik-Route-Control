@@ -4,6 +4,12 @@
 USER_ID=${PUID:-1000}
 GROUP_ID=${PGID:-1000}
 
+# Set timezone if TZ is set
+if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
+    ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
+    echo "$TZ" > /etc/timezone
+fi
+
 # Safely update the group ID if it doesn't match
 if [ "$(getent group appgroup | cut -d: -f3)" != "$GROUP_ID" ]; then
     groupmod -o -g "$GROUP_ID" appgroup
