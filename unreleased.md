@@ -9,6 +9,6 @@
 - **Documentation**: Updated `GEMINI.md` with modern development guidelines including non-root execution, named volume usage, and mandatory security/vulnerability testing for new code changes.
 
 ### Fixed
+- **Core**: Fixed a `SyntaxError` in `main.py` caused by an unmatched closing brace in the `turn_on_service` function.
 - **Core**: Restored the `/api/test/redis/clear` endpoint which was accidentally corrupted in a previous edit, fixing the "Error: JSON.parse" issue when clearing Redis routes.
-- **Core**: Fixed a `SyntaxError` in `main.py` caused by accidentally inserted JavaScript code into the Python backend.
 - **Docker**: Cleaned up `entrypoint.sh` startup logs to remove verbose diagnostic information.

@@ -1626,7 +1626,7 @@ def turn_on_service(service_id, force=False, actor=None):
             regex_pattern += ".*$"
             response["regex"] = regex_pattern
         
-        }
+        return response
     
     print(f"\n🚀 === ({actor}) ENABLING {service['name']} ===")
     
