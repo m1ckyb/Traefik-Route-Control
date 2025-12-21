@@ -1,6 +1,7 @@
 ### Added
 - **UI/UX**: Added a "Clear Traefik Routes from Redis" button in the Redis settings to allow manual cleanup of orphan Traefik entries.
 - **API**: Added `/api/test/redis/clear` endpoint to facilitate manual Redis cleanup.
+- **Logging**: Added "Actor" identification to service startup and shutdown logs. Logs now explicitly show whether an action was triggered via the WebUI (with username), an API Key (with key name), or a background task.
 
 ### Changed
 - **UI/UX**: The "Rotate URL" button is now automatically disabled for services that have "Randomize Suffix" turned off, as static subdomains do not support rotation.
