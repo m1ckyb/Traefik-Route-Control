@@ -14,7 +14,7 @@ ARG PUID=1000
 ARG PGID=1000
 
 # Create a non-root group and user with specific IDs
-RUN apk add --no-cache su-exec shadow && \
+RUN apk add --no-cache su-exec shadow tzdata && \
     addgroup -g ${PGID} appgroup && \
     adduser -D -u ${PUID} -G appgroup appuser && \
     mkdir -p /app/data && \
