@@ -8,4 +8,5 @@
 - **Documentation**: Updated `GEMINI.md` with modern development guidelines including non-root execution, named volume usage, and mandatory security/vulnerability testing for new code changes.
 
 ### Fixed
+- **Core**: Fixed a `SyntaxError` in `main.py` caused by accidentally inserted JavaScript code into the Python backend.
 - **Docker**: Cleaned up `entrypoint.sh` startup logs to remove verbose diagnostic information.
