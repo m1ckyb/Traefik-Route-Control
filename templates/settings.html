@@ -308,8 +308,9 @@
                 <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
                 <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
                        value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
-                <div style="margin-top: 0.5rem;">
+                <div style="margin-top: 0.5rem; display: flex; gap: 10px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
+                    <button type="button" class="btn btn-danger" onclick="clearRedisRoutes()">🗑️ Clear Traefik Routes from Redis</button>
                 </div>
             </div>
         </div>
@@ -846,6 +847,30 @@ async function testRedisConnection(event) {
     } finally {
         btn.textContent = originalText;
         btn.disabled = false;
+    }
+}
+
+async function clearRedisRoutes() {
+    if (!confirm('Are you sure you want to remove ALL Traefik route entries from Redis? This will disconnect all active services.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/test/redis/clear', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast('Error: ' + (data.error || 'Failed to clear routes'), 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
     }
 }
 

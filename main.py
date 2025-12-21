@@ -3351,29 +3351,36 @@ def api_save_setting():
 @app.route('/api/test/redis', methods=['POST'])
 @login_required
 def api_test_redis():
-    """Test Redis connection with provided credentials."""
-    data = request.get_json(silent=True) or {}
+    data = request.get_json()
     host = data.get('host')
     port = data.get('port')
     password = data.get('password')
     
-    if not host or not port:
-        return jsonify({"error": "Host and Port are required"}), 400
-        
-    try:
-        r = redis.Redis(
-            host=host, 
-            port=int(port), 
-            password=password if password else None, 
-            socket_connect_timeout=5,
-            socket_timeout=5
-        )
-        if r.ping():
-            return jsonify({"success": True, "message": "Redis connection successful!"})
-        else:
-            return jsonify({"error": "Redis ping failed"}), 400
+    try {
+        r = redis.Redis(host=host, port=port, password=password, socket_timeout=5)
+        r.ping()
+        return jsonify({"message": "Redis connection successful!"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/redis/clear', methods=['POST'])
+@login_required
+def api_clear_redis_routes():
+    """Clear all Traefik route entries from Redis."""
+    r = get_redis()
+    if not r:
+        return jsonify({"error": "Redis connection failed"}), 500
+    
+    try:
+        # Find all keys starting with traefik/
+        keys = r.keys("traefik/*")
+        if keys:
+            r.delete(*keys)
+            return jsonify({"message": f"Successfully cleared {len(keys)} Traefik entries from Redis"})
+        else:
+            return jsonify({"message": "No Traefik entries found in Redis"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/test/hass', methods=['POST'])
 @login_required
