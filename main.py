@@ -3356,6 +3356,16 @@ def api_test_redis():
     port = data.get('port')
     password = data.get('password')
     
+    try:
+        r = redis.Redis(host=host, port=port, password=password, socket_timeout=5)
+        r.ping()
+        return jsonify({"message": "Redis connection successful!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/redis/clear', methods=['POST'])
+@login_required
+def api_clear_redis_routes():
     """Clear all Traefik route entries from Redis."""
     r = get_redis()
     if not r:
@@ -3365,6 +3375,7 @@ def api_test_redis():
         # Find all keys starting with traefik/
         keys = r.keys("traefik/*")
         if keys:
+            # redis-py delete needs positional arguments
             r.delete(*keys)
             return jsonify({"message": f"Successfully cleared {len(keys)} Traefik entries from Redis"})
         else:
