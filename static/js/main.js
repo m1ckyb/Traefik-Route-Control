@@ -343,11 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Attach event listener to API Key Select
     const hassApiKeySelect = document.getElementById('hass-api-key-select');
     if (hassApiKeySelect) {
-        hassApiKeySelect.addEventListener('change', function() {
-            // Reset authorization when selection changes
-            window.authorizedApiKey = null;
-            updateHassConfig();
-        });
+        hassApiKeySelect.addEventListener('change', updateHassConfig);
     }
 });
 
@@ -359,8 +355,7 @@ function showHassModal(serviceId, serviceName) {
     modal.dataset.serviceId = serviceId;
     modal.dataset.serviceName = serviceName;
     
-    // Reset Authorized Key
-    window.authorizedApiKey = null;
+    // Reset selection
     const keySelect = document.getElementById('hass-api-key-select');
     if (keySelect) keySelect.value = "";
     
@@ -415,9 +410,10 @@ function updateHassConfig() {
     
     // Determine API Key placeholder
     let apiKeyPlaceholder = 'your-api-key-here';
-    if (window.authorizedApiKey) {
-        // Since we can't retrieve the actual key, we use the name with a clear indicator
-        apiKeyPlaceholder = `<${window.authorizedApiKey}>`;
+    const keySelect = document.getElementById('hass-api-key-select');
+    if (keySelect && keySelect.value) {
+        // Use a clear placeholder that indicates the user needs to replace it
+        apiKeyPlaceholder = `REPLACE_WITH_SECRET_FOR_${keySelect.value}`;
     }
     
     // Sanitize service name for YAML - remove special characters and normalize spaces
@@ -491,71 +487,3 @@ function copyToClipboard(text, successMessage) {
         }
     }
 }
-
-// Re-auth and API Key functions
-function authorizeApiKey() {
-    const select = document.getElementById('hass-api-key-select');
-    const selectedKey = select.value;
-    
-    if (!selectedKey) {
-        showToast('Please select an API Key first', 'warning');
-        return;
-    }
-    
-    // Open re-auth modal
-    document.getElementById('reauth-password').value = '';
-    document.getElementById('reauthModal').style.display = 'flex';
-    document.getElementById('reauth-password').focus();
-}
-
-function closeReauthModal() {
-    document.getElementById('reauthModal').style.display = 'none';
-}
-
-async function confirmReauth() {
-    const password = document.getElementById('reauth-password').value;
-    if (!password) return;
-    
-    try {
-        const response = await fetch('/api/auth/verify', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
-            body: JSON.stringify({ password: password })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            // Success
-            const select = document.getElementById('hass-api-key-select');
-            window.authorizedApiKey = select.value;
-            updateHassConfig();
-            closeReauthModal();
-            showToast('Identity verified. Key placeholder updated.', 'success');
-            
-            // Add a note about hidden values
-            setTimeout(() => {
-                showToast('Note: Actual key values are hidden for security.', 'info');
-            }, 2000);
-        } else {
-            showToast('Error: ' + (data.error || 'Verification failed'), 'error');
-        }
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
-}
-
-// Allow Enter key in re-auth modal
-document.addEventListener('DOMContentLoaded', function() {
-    const reauthPwd = document.getElementById('reauth-password');
-    if (reauthPwd) {
-        reauthPwd.addEventListener('keyup', function(event) {
-            if (event.key === 'Enter') {
-                confirmReauth();
-            }
-        });
-    }
-});
