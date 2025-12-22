@@ -4,6 +4,10 @@
 - **Backend**: Implemented `routing.py` module for managing WireGuard interfaces and remote VPS `iptables` rules via SSH.
 - **Dependencies**: Added `wireguard-tools`, `openresolv`, `iproute2`, `openssh-client`, and `paramiko` to the Docker image.
 
+### Security
+- **Hardening**: Implemented strict input sanitization (`shlex.quote`) and validation for all VPS/WireGuard settings to prevent command injection and configuration tampering.
+- **Whitelist**: Expanded `ALLOWED_USER_SETTINGS` to include new VPS configuration keys.
+
 ### Changed
 
 ### Fixed
