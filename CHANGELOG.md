@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.21] - 2025-12-22
+
+### Added
+- Option to delete WebAuthn passkeys from the Settings page.
+- API Key selection dropdown in Home Assistant settings modal with re-authorization flow.
+
 ## [0.0.20] - 2025-12-21
 
 ### Added
