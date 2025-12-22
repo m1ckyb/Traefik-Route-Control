@@ -229,12 +229,22 @@ async function repairService(serviceId) {
 
 
 
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function showDiagnosticsModal(diagnostics) {
     const modal = document.getElementById('diagnosticsModal');
     const content = document.getElementById('diagnosticsContent');
     
     let html = `<div class="diagnostics-service-info">
-        <h4>${diagnostics.service.name}</h4>
+        <h4>${escapeHtml(diagnostics.service.name)}</h4>
         <p><strong>Status:</strong> ${diagnostics.service.enabled ? 'Enabled' : 'Disabled'}</p>
     </div>`;
     
@@ -252,21 +262,21 @@ function showDiagnosticsModal(diagnostics) {
         html += `<div class="diagnostic-check ${statusClass}">
             <div class="check-header">
                 <span class="check-icon">${statusIcon}</span>
-                <strong>${checkName.replace(/_/g, ' ').toUpperCase()}</strong>
+                <strong>${escapeHtml(checkName.replace(/_/g, ' ').toUpperCase())}</strong>
             </div>
-            <div class="check-message">${checkData.message}</div>`;
+            <div class="check-message">${escapeHtml(checkData.message)}</div>`;
         
         // Show additional details if available
         if (checkData.expected || checkData.actual || checkData.port || checkData.hostname || checkData.target_url || checkData.target || checkData.status_code || checkData.error) {
             html += '<div class="check-details">';
-            if (checkData.expected) html += `<div>Expected: <code>${checkData.expected}</code></div>`;
-            if (checkData.actual) html += `<div>Actual: <code>${checkData.actual}</code></div>`;
-            if (checkData.port) html += `<div>Port: <code>${checkData.port}</code></div>`;
-            if (checkData.hostname) html += `<div>Hostname: <code>${checkData.hostname}</code></div>`;
-            if (checkData.target_url) html += `<div>Target: <code>${checkData.target_url}</code></div>`;
-            if (checkData.target) html += `<div>Backend URL: <code>${checkData.target}</code></div>`;
-            if (checkData.status_code) html += `<div>Status Code: <code>${checkData.status_code}</code></div>`;
-            if (checkData.error) html += `<div>Error: <code>${checkData.error}</code></div>`;
+            if (checkData.expected) html += `<div>Expected: <code>${escapeHtml(checkData.expected)}</code></div>`;
+            if (checkData.actual) html += `<div>Actual: <code>${escapeHtml(checkData.actual)}</code></div>`;
+            if (checkData.port) html += `<div>Port: <code>${escapeHtml(checkData.port)}</code></div>`;
+            if (checkData.hostname) html += `<div>Hostname: <code>${escapeHtml(checkData.hostname)}</code></div>`;
+            if (checkData.target_url) html += `<div>Target: <code>${escapeHtml(checkData.target_url)}</code></div>`;
+            if (checkData.target) html += `<div>Backend URL: <code>${escapeHtml(checkData.target)}</code></div>`;
+            if (checkData.status_code) html += `<div>Status Code: <code>${escapeHtml(checkData.status_code)}</code></div>`;
+            if (checkData.error) html += `<div>Error: <code>${escapeHtml(checkData.error)}</code></div>`;
             html += '</div>';
         }
         

@@ -1,9 +1,10 @@
 ### Added
 
 ### Changed
-- Home Assistant config modal now prevents password manager interference.
+- Refactored `main.py` to remove legacy CLI code and `argparse` dependency.
+- Hardened `static/js/main.js` against XSS by sanitizing inputs in `showDiagnosticsModal`.
 
 ### Fixed
-- Reverted API Key selection flow in HASS modal to simplify the user experience.
 
 ### Removed
+- Removed legacy `cmd_on` and `cmd_off` functions from `main.py`.

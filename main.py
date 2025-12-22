@@ -7,7 +7,6 @@ import string
 import os
 import sys
 import builtins
-import argparse
 import urllib3
 from urllib.parse import urlparse
 import json
@@ -1896,20 +1895,7 @@ def rotate_service(service_id):
     return turn_on_service(service_id)
 
 # Legacy functions for backward compatibility with CLI
-def cmd_off():
-    """Turn off all services (legacy CLI command)"""
-    services = db.get_all_services()
-    for service in services:
-        if service['enabled']:
-            turn_off_service(service['id'])
-
-def cmd_on():
-    """Turn on first service (legacy CLI command)"""
-    services = db.get_all_services()
-    if services:
-        turn_on_service(services[0]['id'])
-    else:
-        print("❌ No services configured")
+# Removed cmd_off and cmd_on as they are no longer supported
 
 # ================= API / MAIN =================
 app = Flask(__name__)
@@ -3596,31 +3582,13 @@ if __name__ != "__main__":
         print(f"⚠️ Failed to start background tasks: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Control Traefik Route Rotation")
-    parser.add_argument("action", choices=["on", "off", "status", "rotate", "serve"], 
-                        help="Action to perform", default="serve", nargs="?")
-    args = parser.parse_args()
-
     # Ensure environment is migrated/setup before any action
     migrate_env_to_db()
 
-    if args.action == "status":
-        s = get_status()
-        print(f"👻 RouteGhost v{version} Status")
-        print(f"🔥 Firewall: {s.get('firewall', 'UNKNOWN')}")
-        print(f"📡 Public IP: {s.get('public_ip', 'Unknown')}")
-        print(f"👻 Active Services: {s.get('active_count', 0)}/{s.get('total_services', 0)}")
-        if s.get('active_services'):
-            print("\n🌐 Active Services:")
-            for svc in s['active_services']:
-                print(f"   • {svc['name']}: {svc['hostname']}")
-    elif args.action == "off":
-        cmd_off()
-    elif args.action == "on" or args.action == "rotate":
-        cmd_on()
-    elif args.action == "serve":
-        start_health_check_thread()
-        start_port_rotation_thread()
-        print(f"🚀 Starting Web UI on http://{API_HOST}:{API_PORT}")
-        print(f"   Configure settings and services at http://{API_HOST}:{API_PORT}/settings")
-        app.run(host=API_HOST, port=API_PORT, debug=False)
+    # Start background threads (also handled if imported via Gunicorn above, but repeated here for direct run)
+    start_health_check_thread()
+    start_port_rotation_thread()
+    
+    print(f"🚀 Starting Web UI on http://{API_HOST}:{API_PORT}")
+    print(f"   Configure settings and services at http://{API_HOST}:{API_PORT}/settings")
+    app.run(host=API_HOST, port=API_PORT, debug=False)
