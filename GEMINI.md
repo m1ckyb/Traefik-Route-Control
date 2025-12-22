@@ -1,3 +1,6 @@
+# Gemini Added Memories
+- The user allows the use of tools like `docker` and `gh` without requiring manual confirmation for every session once initially allowed.
+
 # Gemini Onboarding - RouteGhost
 
 ## Project Overview
