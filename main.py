@@ -1420,6 +1420,10 @@ def turn_off_service(service_id, actor=None):
         else:
             actor = "Background Task"
 
+    if not service.get('enabled'):
+        print(f"ℹ️ ({actor}) {service['name']} is already offline. Ignoring request.")
+        return {"message": f"{service['name']} is already offline"}
+
     print(f"\n🛑 === ({actor}) SHUTTING DOWN {service['name']} ===")
     r = get_redis()
     if not r:
