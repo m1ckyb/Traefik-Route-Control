@@ -2738,6 +2738,10 @@ ALLOWED_USER_SETTINGS = {
     'PORT_ROTATION_INTERVAL',
     'DISCORD_WEBHOOK_URL', 'NOTIFY_EVENTS_HEALTH', 'NOTIFY_EVENTS_SYSTEM',
     'ENFORCE_2FA',
+    'ROUTING_MODE',
+    'VPS_HOST', 'VPS_SSH_USER', 'VPS_SSH_PORT', 'VPS_SSH_KEY',
+    'WG_CLIENT_ADDRESS', 'WG_PRIVATE_KEY', 'WG_SERVER_ENDPOINT',
+    'WG_SERVER_PUBLIC_KEY', 'WG_ALLOWED_IPS',
 }
 
 @app.route('/onboarding/complete', methods=['POST'])
@@ -2875,7 +2879,20 @@ def settings():
             rejected_count = 0
             for key in request.form:
                 if key in ALLOWED_USER_SETTINGS:
-                    db.set_setting(key, request.form[key])
+                    value = request.form[key]
+                    
+                    # Basic Validation
+                    if key == 'WG_CLIENT_ADDRESS' and value:
+                        if '/' not in value:
+                            flash(f'Error saving {key}: Must be in CIDR format (e.g. 10.0.0.2/24)', 'error')
+                            continue
+                    
+                    if key == 'WG_SERVER_ENDPOINT' and value:
+                        if ':' not in value:
+                            flash(f'Error saving {key}: Must be in IP:Port format', 'error')
+                            continue
+
+                    db.set_setting(key, value)
                     saved_count += 1
                 else:
                     print(f"⚠️ Security: Rejected attempt to set disallowed setting '{key}' via settings page")
