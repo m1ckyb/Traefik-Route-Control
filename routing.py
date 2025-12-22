@@ -1,0 +1,204 @@
+import os
+import subprocess
+import paramiko
+import tempfile
+import database as db
+import time
+
+def get_routing_mode():
+    return db.get_setting('ROUTING_MODE', 'unifi')
+
+class WireGuardManager:
+    @staticmethod
+    def create_config():
+        """Creates the wg0.conf file from settings."""
+        private_key = db.get_setting('WG_PRIVATE_KEY')
+        address = db.get_setting('WG_CLIENT_ADDRESS')
+        peer_public_key = db.get_setting('WG_SERVER_PUBLIC_KEY')
+        endpoint = db.get_setting('WG_SERVER_ENDPOINT')
+        allowed_ips = db.get_setting('WG_ALLOWED_IPS', '0.0.0.0/0')
+        
+        if not all([private_key, address, peer_public_key, endpoint]):
+            return False, "Missing WireGuard configuration"
+
+        config_content = f"""[Interface]
+PrivateKey = {private_key}
+Address = {address}
+
+[Peer]
+PublicKey = {peer_public_key}
+Endpoint = {endpoint}
+AllowedIPs = {allowed_ips}
+PersistentKeepalive = 25
+"""
+        config_dir = '/etc/wireguard'
+        config_path = os.path.join(config_dir, 'wg0.conf')
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+            with open(config_path, 'w') as f:
+                f.write(config_content)
+            os.chmod(config_path, 0o600)
+            return True, config_path
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def up():
+        """Brings up the WireGuard interface."""
+        # Check if already up
+        try:
+            subprocess.check_call(['ip', 'link', 'show', 'wg0'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True, "Already up"
+        except subprocess.CalledProcessError:
+            pass # Interface doesn't exist
+
+        success, msg = WireGuardManager.create_config()
+        if not success:
+            return False, msg
+
+        try:
+            # wg-quick up might fail if it tries to set sysctls that are locked in docker
+            # But usually it works if NET_ADMIN is there.
+            subprocess.check_call(['wg-quick', 'up', 'wg0'])
+            return True, "Interface up"
+        except subprocess.CalledProcessError as e:
+            return False, f"wg-quick up failed: {e}"
+
+    @staticmethod
+    def down():
+        """Brings down the WireGuard interface."""
+        try:
+            subprocess.check_call(['wg-quick', 'down', 'wg0'])
+            return True, "Interface down"
+        except subprocess.CalledProcessError:
+             # Try to clean up anyway if wg-quick fails (e.g. interface gone)
+            try:
+                subprocess.check_call(['ip', 'link', 'del', 'wg0'])
+            except:
+                pass
+            return True, "Interface down (or already down)"
+
+class VPSManager:
+    @staticmethod
+    def get_ssh_client(timeout=5):
+        host = db.get_setting('VPS_HOST')
+        user = db.get_setting('VPS_SSH_USER', 'root')
+        try:
+            port = int(db.get_setting('VPS_SSH_PORT', '22'))
+        except:
+            port = 22
+        key_content = db.get_setting('VPS_SSH_KEY')
+
+        if not all([host, user, key_content]):
+            raise Exception("Missing VPS SSH configuration")
+
+        # Normalize key content (ensure it has newlines)
+        key_content = key_content.strip()
+        
+        # Create a temp file for the key
+        key_file = tempfile.NamedTemporaryFile(delete=False)
+        key_file.write(key_content.encode())
+        key_file.close()
+        
+        try:
+            # Try to load as RSA, then others if needed
+            try:
+                k = paramiko.RSAKey.from_private_key_file(key_file.name)
+            except:
+                # Fallback for Ed25519 or others if supported by paramiko version
+                # But paramiko often needs specific class. 
+                # Let's try to infer or just let paramiko handle it if possible.
+                # For now, assume RSA or compatible.
+                # Actually, paramiko.SSHClient().connect() accepts key_filename!
+                k = None
+
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            if k:
+                client.connect(host, port=port, username=user, pkey=k, timeout=timeout)
+            else:
+                client.connect(host, port=port, username=user, key_filename=key_file.name, timeout=timeout)
+                
+            return client
+        finally:
+            os.unlink(key_file.name)
+
+    @staticmethod
+    def forward_port(public_port, local_ip, local_port):
+        """
+        Adds iptables rule on VPS to forward traffic.
+        iptables -t nat -A PREROUTING -p tcp --dport <public_port> -j DNAT --to-destination <local_ip>:<local_port>
+        """
+        client = VPSManager.get_ssh_client()
+        
+        # Clean up existing rule for this port first
+        VPSManager.cleanup_port_forward(public_port, client=client)
+
+        # We also need to ensure MASQUERADE is enabled for the interface traffic leaves on?
+        # Or just generic masquerade.
+        # Safest is: iptables -t nat -A POSTROUTING -j MASQUERADE
+        # We'll check if it exists first to avoid dupes.
+        
+        cmds = []
+        
+        # Check Masquerade
+        check_masq = "iptables -t nat -C POSTROUTING -j MASQUERADE"
+        stdin, stdout, stderr = client.exec_command(check_masq)
+        if stdout.channel.recv_exit_status() != 0:
+            cmds.append("iptables -t nat -A POSTROUTING -j MASQUERADE")
+
+        # Add DNAT
+        cmds.append(f"iptables -t nat -A PREROUTING -p tcp --dport {public_port} -j DNAT --to-destination {local_ip}:{local_port}")
+        
+        for cmd in cmds:
+            stdin, stdout, stderr = client.exec_command(cmd)
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                error = stderr.read().decode()
+                client.close()
+                raise Exception(f"VPS command failed: {cmd} -> {error}")
+        
+        client.close()
+        return True
+
+    @staticmethod
+    def cleanup_port_forward(public_port, client=None):
+        should_close = False
+        if not client:
+            try:
+                client = VPSManager.get_ssh_client()
+                should_close = True
+            except:
+                return
+
+        # Find rules matching --dport {public_port}
+        stdin, stdout, stderr = client.exec_command(f"iptables-save | grep 'dport {public_port}'")
+        rules = stdout.read().decode().splitlines()
+        
+        for rule in rules:
+            if "-A " in rule and "DNAT" in rule:
+                # Convert Add rule to Delete rule
+                # iptables-save output example: -A PREROUTING -p tcp -m tcp --dport 443 -j DNAT --to-destination 10.0.0.2:1234
+                del_cmd = rule.replace("-A ", "-D ")
+                cmd = f"iptables -t nat {del_cmd}"
+                client.exec_command(cmd)
+        
+        if should_close:
+            client.close()
+
+    @staticmethod
+    def test_connection(host, user, port, key_content):
+        key_file = tempfile.NamedTemporaryFile(delete=False)
+        key_file.write(key_content.encode())
+        key_file.close()
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(host, port=int(port), username=user, key_filename=key_file.name, timeout=5)
+            client.close()
+            return True, "Connection successful"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            os.unlink(key_file.name)

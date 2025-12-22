@@ -11,6 +11,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=UTC
+    cap_add:
+      - NET_ADMIN
     # Mount the data volume
     volumes:
       - routeghost_data:/app/data

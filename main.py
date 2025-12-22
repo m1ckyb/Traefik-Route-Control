@@ -47,6 +47,7 @@ except ImportError:
     qrcode = None
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
+import routing
 
 # Import DATA_DIR for secret key storage
 from database import DATA_DIR
@@ -1440,32 +1441,51 @@ def turn_off_service(service_id, actor=None):
     r.delete(f"traefik/http/routers/{router_name}/tls/certResolver")
     r.delete(f"traefik/http/services/{service_name}/loadbalancer/servers/0/url")
 
-    # Prepare UniFi Session for multiple operations
+    # Determine Routing Mode
+    routing_mode = routing.get_routing_mode()
     unifi_session = None
     unifi_base_url = None
-    unifi_host = get_setting("UNIFI_HOST", required=False)
-    unifi_user = get_setting("UNIFI_USER", required=False)
-    unifi_pass = get_setting("UNIFI_PASS", required=False)
-    
-    if all([unifi_host, unifi_user, unifi_pass]):
-        unifi_base_url = f"https://{unifi_host}"
-        unifi_session = requests.Session()
-        unifi_session.verify = False
-        print(f"🔹 Connecting to UniFi Controller ({unifi_host})...")
-        resp = login_unifi_with_retry(unifi_session, unifi_base_url, unifi_user, unifi_pass)
-        if resp and resp.status_code == 200:
-            csrf_token = resp.headers.get("x-csrf-token")
-            if csrf_token:
-                unifi_session.headers.update({"X-CSRF-Token": csrf_token})
 
-    remaining_count = count_active_routers()
-    print(f"   Active routers remaining: {remaining_count}")
+    if routing_mode == 'unifi':
+        # Prepare UniFi Session for multiple operations
+        unifi_host = get_setting("UNIFI_HOST", required=False)
+        unifi_user = get_setting("UNIFI_USER", required=False)
+        unifi_pass = get_setting("UNIFI_PASS", required=False)
+        
+        if all([unifi_host, unifi_user, unifi_pass]):
+            unifi_base_url = f"https://{unifi_host}"
+            unifi_session = requests.Session()
+            unifi_session.verify = False
+            print(f"🔹 Connecting to UniFi Controller ({unifi_host})...")
+            resp = login_unifi_with_retry(unifi_session, unifi_base_url, unifi_user, unifi_pass)
+            if resp and resp.status_code == 200:
+                csrf_token = resp.headers.get("x-csrf-token")
+                if csrf_token:
+                    unifi_session.headers.update({"X-CSRF-Token": csrf_token})
 
-    if remaining_count == 0:
-        print("   No other services active. Closing firewall...")
-        toggle_unifi(False, session=unifi_session, base_url=unifi_base_url)
-    else:
-        print("   ⚠️ Other services are still active. Firewall will remain OPEN.")
+        remaining_count = count_active_routers()
+        print(f"   Active routers remaining: {remaining_count}")
+
+        if remaining_count == 0:
+            print("   No other services active. Closing firewall...")
+            toggle_unifi(False, session=unifi_session, base_url=unifi_base_url)
+        else:
+            print("   ⚠️ Other services are still active. Firewall will remain OPEN.")
+
+    elif routing_mode == 'vps':
+        print("🔹 Cleaning up VPS forwarding...")
+        try:
+            routing.VPSManager.cleanup_port_forward(443)
+        except Exception as e:
+            print(f"   ⚠️ Failed to cleanup VPS: {e}")
+        
+        # Check active services (excluding this one)
+        all_services = db.get_all_services()
+        other_active = [s for s in all_services if s['enabled'] and s['id'] != service_id]
+        
+        if not other_active:
+            print("🔹 Stopping WireGuard...")
+            routing.WireGuardManager.down()
 
     print("🔹 Cleaning up DNS records...")
     if service.get('random_suffix', 1):
@@ -1493,41 +1513,42 @@ def turn_off_service(service_id, actor=None):
             else:
                 print("   No DNS records found to clean.")
 
-    print("🔹 Cleaning up Origin Rule...")
-    origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
-    
-    # Get all currently enabled services to build the list of hostnames
-    all_services = db.get_all_services()
-    # Exclude the service being turned off
-    active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname'] and s['id'] != service_id]
-    
-    ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
-    if ruleset_data:
-        rules = ruleset_data.get('result', {}).get('rules', [])
-        target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
-        ruleset_id = ruleset_data.get('result', {}).get('id')
+    if routing_mode == 'unifi':
+        print("🔹 Cleaning up Origin Rule...")
+        origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+        
+        # Get all currently enabled services to build the list of hostnames
+        all_services = db.get_all_services()
+        # Exclude the service being turned off
+        active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname'] and s['id'] != service_id]
+        
+        ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
+        if ruleset_data:
+            rules = ruleset_data.get('result', {}).get('rules', [])
+            target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
+            ruleset_id = ruleset_data.get('result', {}).get('id')
 
-        if target_rule:
-            if active_hostnames:
-                # Update the rule with the remaining hostnames
-                host_list = " ".join(f'"{h}"' for h in active_hostnames)
-                new_expression = f"http.host in {{{host_list}}}"
-                
-                update_data = {
-                    "expression": new_expression,
-                    "description": origin_rule_name,
-                    "action": target_rule['action'],
-                    "action_parameters": target_rule['action_parameters'],
-                    "enabled": True
-                }
-                cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
-                print(f"   Updated Origin Rule with remaining hosts: {origin_rule_name}")
+            if target_rule:
+                if active_hostnames:
+                    # Update the rule with the remaining hostnames
+                    host_list = " ".join(f'"{h}"' for h in active_hostnames)
+                    new_expression = f"http.host in {{{host_list}}}"
+                    
+                    update_data = {
+                        "expression": new_expression,
+                        "description": origin_rule_name,
+                        "action": target_rule['action'],
+                        "action_parameters": target_rule['action_parameters'],
+                        "enabled": True
+                    }
+                    cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
+                    print(f"   Updated Origin Rule with remaining hosts: {origin_rule_name}")
+                else:
+                    # No active services left, delete the rule
+                    cf_request("DELETE", f"rulesets/{ruleset_id}/rules/{target_rule['id']}")
+                    print(f"   Deleted Origin Rule as no services are active: {origin_rule_name}")
             else:
-                # No active services left, delete the rule
-                cf_request("DELETE", f"rulesets/{ruleset_id}/rules/{target_rule['id']}")
-                print(f"   Deleted Origin Rule as no services are active: {origin_rule_name}")
-        else:
-            print(f"   No Origin Rule found to clean up.")
+                print(f"   No Origin Rule found to clean up.")
 
     print("🔹 Updating Home Assistant...")
     update_hass("Disabled", service['name'], service.get('hass_entity_id'))
@@ -1536,10 +1557,10 @@ def turn_off_service(service_id, actor=None):
     db.update_service_status(service_id, False, None, None)
     
     # Sync UniFi Groups (remove this service's IP/Port if not used by others)
-    sync_unifi_groups(session=unifi_session, base_url=unifi_base_url)
-    
-    if unifi_session:
-        logout_unifi(unifi_session, unifi_base_url)
+    if routing_mode == 'unifi':
+        sync_unifi_groups(session=unifi_session, base_url=unifi_base_url)
+        if unifi_session:
+            logout_unifi(unifi_session, unifi_base_url)
     
     print(f"✅ {service['name']} ACCESS DISABLED.\n")
     return {"message": f"{service['name']} disabled successfully"}
@@ -1660,6 +1681,10 @@ def turn_on_service(service_id, force=False, actor=None):
     
     print(f"\n🚀 === ({actor}) ENABLING {service['name']} ===")
     
+    # Determine Routing Mode
+    routing_mode = routing.get_routing_mode()
+    print(f"🔹 Routing Mode: {routing_mode.upper()}")
+    
     # Check if any other service is already enabled and get its port
     # All active services share the same firewall port
     all_services = db.get_all_services()
@@ -1679,38 +1704,58 @@ def turn_on_service(service_id, force=False, actor=None):
         print(f"⚠️ Warning: Multiple different ports detected across active services: {active_service_ports}")
         print(f"   This may indicate a configuration issue. Using port from {active_service_with_port['name']}")
     
-    # Prepare UniFi Session for multiple operations
-    unifi_session = None
-    unifi_base_url = None
-    unifi_host = get_setting("UNIFI_HOST", required=False)
-    unifi_user = get_setting("UNIFI_USER", required=False)
-    unifi_pass = get_setting("UNIFI_PASS", required=False)
-    
-    if all([unifi_host, unifi_user, unifi_pass]):
-        unifi_base_url = f"https://{unifi_host}"
-        unifi_session = requests.Session()
-        unifi_session.verify = False
-        print(f"🔹 Connecting to UniFi Controller ({unifi_host})...")
-        resp = login_unifi_with_retry(unifi_session, unifi_base_url, unifi_user, unifi_pass)
-        if resp and resp.status_code == 200:
-            csrf_token = resp.headers.get("x-csrf-token")
-            if csrf_token:
-                unifi_session.headers.update({"X-CSRF-Token": csrf_token})
-
     # Use existing port if available, otherwise generate new one
     if active_service_with_port:
         active_service_port = active_service_with_port['current_port']
         print(f"   Reusing existing port from {active_service_with_port['name']}: {active_service_port}")
-        # Firewall is already open with the existing port
-        print(f"   Firewall already open on port {active_service_port}")
     else:
         active_service_port = generate_random_port()
         print(f"   Generated new random port: {active_service_port}")
-        # Update UniFi with the new port only if we're generating a new one
-        if not toggle_unifi(True, active_service_port, session=unifi_session, base_url=unifi_base_url):
-            print("⚠️ Warning: UniFi update failed, but proceeding with other steps...")
-    
+        
     random_port = active_service_port  # Use the shared port
+
+    # === FIREWALL & ROUTING SETUP ===
+    unifi_session = None
+    unifi_base_url = None
+
+    if routing_mode == 'unifi':
+        # Traditional Cloudflare + UniFi
+        unifi_host = get_setting("UNIFI_HOST", required=False)
+        unifi_user = get_setting("UNIFI_USER", required=False)
+        unifi_pass = get_setting("UNIFI_PASS", required=False)
+        
+        if all([unifi_host, unifi_user, unifi_pass]):
+            unifi_base_url = f"https://{unifi_host}"
+            unifi_session = requests.Session()
+            unifi_session.verify = False
+            print(f"🔹 Connecting to UniFi Controller ({unifi_host})...")
+            resp = login_unifi_with_retry(unifi_session, unifi_base_url, unifi_user, unifi_pass)
+            if resp and resp.status_code == 200:
+                csrf_token = resp.headers.get("x-csrf-token")
+                if csrf_token:
+                    unifi_session.headers.update({"X-CSRF-Token": csrf_token})
+        
+        # Only toggle if new port or ensuring open
+        if not active_service_with_port or force:
+             if not toggle_unifi(True, active_service_port, session=unifi_session, base_url=unifi_base_url):
+                print("⚠️ Warning: UniFi update failed, but proceeding...")
+    
+    elif routing_mode == 'vps':
+        # VPS Gateway + WireGuard
+        print("🔹 Setting up WireGuard Connection...")
+        success, msg = routing.WireGuardManager.up()
+        if not success:
+            return {"error": f"WireGuard failed: {msg}"}
+        print(f"   WireGuard: {msg}")
+
+        print("🔹 Configuring VPS Port Forwarding...")
+        local_ip = get_setting('WG_CLIENT_ADDRESS').split('/')[0]
+        try:
+            # We forward Public 443 -> Local WG IP : Random Port
+            routing.VPSManager.forward_port(443, local_ip, random_port)
+            print(f"   Forwarded VPS:443 -> {local_ip}:{random_port}")
+        except Exception as e:
+            return {"error": f"VPS configuration failed: {e}"}
 
     domain_root = get_setting("DOMAIN_ROOT")
     if not domain_root:
@@ -1723,17 +1768,24 @@ def turn_on_service(service_id, force=False, actor=None):
         new_subdomain = service['subdomain_prefix']
         
     full_hostname = f"{new_subdomain}.{domain_root}"
-    public_ip = get_public_ip()
+    
+    # Determine IP for DNS
+    if routing_mode == 'vps':
+        public_ip = get_setting('VPS_HOST') # The VPS IP
+        proxied = False # Grey cloud
+    else:
+        public_ip = get_public_ip()
+        proxied = True # Orange cloud
     
     print(f"   Service: {service['name']}")
     print(f"   Target:  {full_hostname}")
     print(f"   Port:    {random_port}")
-    print(f"   IP:      {public_ip}")
+    print(f"   IP:      {public_ip} (Proxied: {proxied})")
 
     print("🔹 Creating/Updating DNS Record...")
     # Check if record exists first (important for static mode to avoid duplicates/errors)
     existing_records = cf_request("GET", f"dns_records?type=A&name={full_hostname}")
-    dns_data = {"type": "A", "name": new_subdomain, "content": public_ip, "ttl": 1, "proxied": True}
+    dns_data = {"type": "A", "name": new_subdomain, "content": public_ip, "ttl": 1, "proxied": proxied}
     
     if existing_records and existing_records.get('result'):
         # Update existing record
@@ -1748,67 +1800,68 @@ def turn_on_service(service_id, force=False, actor=None):
     if not result:
         return {"error": "Failed to create DNS record"}
 
-    print("🔹 Updating Origin Rule...")
-    origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
-    
-    # Get all currently enabled services to build the list of hostnames
-    all_services = db.get_all_services()
-    active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname']]
-    
-    # Add the new hostname to the list
-    if full_hostname not in active_hostnames:
-        active_hostnames.append(full_hostname)
-    
-    # Format for Cloudflare API
-    host_list = " ".join(f'"{h}"' for h in active_hostnames)
-    new_expression = f"http.host in {{{host_list}}}"
-    
-    ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
-    
-    if ruleset_data:
-        rules = ruleset_data.get('result', {}).get('rules', [])
-        target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
-        ruleset_id = ruleset_data.get('result', {}).get('id')
+    if routing_mode == 'unifi':
+        print("🔹 Updating Origin Rule...")
+        origin_rule_name = get_setting("ORIGIN_RULE_NAME", required=False) or "Service Rotation"
+        
+        # Get all currently enabled services to build the list of hostnames
+        all_services = db.get_all_services()
+        active_hostnames = [s['current_hostname'] for s in all_services if s['enabled'] and s['current_hostname']]
+        
+        # Add the new hostname to the list
+        if full_hostname not in active_hostnames:
+            active_hostnames.append(full_hostname)
+        
+        # Format for Cloudflare API
+        host_list = " ".join(f'"{h}"' for h in active_hostnames)
+        new_expression = f"http.host in {{{host_list}}}"
+        
+        ruleset_data = cf_request("GET", "rulesets/phases/http_request_origin/entrypoint")
+        
+        if ruleset_data:
+            rules = ruleset_data.get('result', {}).get('rules', [])
+            target_rule = next((r for r in rules if r.get('description') == origin_rule_name), None)
+            ruleset_id = ruleset_data.get('result', {}).get('id')
 
-        if target_rule:
-            # Update existing rule
-            update_data = {
-                "expression": new_expression,
-                "description": origin_rule_name,
-                "action": target_rule['action'],
-                "action_parameters": target_rule['action_parameters'],
-                "enabled": True
-            }
-            # Also update the port in the action parameters
-            if 'origin' not in update_data['action_parameters']:
-                update_data['action_parameters']['origin'] = {}
-            update_data['action_parameters']['origin']['port'] = random_port
+            if target_rule:
+                # Update existing rule
+                update_data = {
+                    "expression": new_expression,
+                    "description": origin_rule_name,
+                    "action": target_rule['action'],
+                    "action_parameters": target_rule['action_parameters'],
+                    "enabled": True
+                }
+                # Also update the port in the action parameters
+                if 'origin' not in update_data['action_parameters']:
+                    update_data['action_parameters']['origin'] = {}
+                update_data['action_parameters']['origin']['port'] = random_port
 
-            cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
-            print(f"   Updated existing Origin Rule: {origin_rule_name}")
-        else:
-            # Create a new rule
-            new_rule_data = {
-                "expression": new_expression,
-                "description": origin_rule_name,
-                "action": "route",
-                "action_parameters": {
-                    "origin": {
-                        "port": random_port
-                    }
-                },
-                "enabled": True
-            }
-            
-            rules_data = {
-                "rules": rules + [new_rule_data]
-            }
-            
-            result = cf_request("PUT", f"rulesets/{ruleset_id}", rules_data)
-            if result:
-                print(f"   Created new Origin Rule: {origin_rule_name}")
+                cf_request("PATCH", f"rulesets/{ruleset_id}/rules/{target_rule['id']}", update_data)
+                print(f"   Updated existing Origin Rule: {origin_rule_name}")
             else:
-                print(f"   ⚠️ Warning: Failed to create Origin Rule")
+                # Create a new rule
+                new_rule_data = {
+                    "expression": new_expression,
+                    "description": origin_rule_name,
+                    "action": "route",
+                    "action_parameters": {
+                        "origin": {
+                            "port": random_port
+                        }
+                    },
+                    "enabled": True
+                }
+                
+                rules_data = {
+                    "rules": rules + [new_rule_data]
+                }
+                
+                result = cf_request("PUT", f"rulesets/{ruleset_id}", rules_data)
+                if result:
+                    print(f"   Created new Origin Rule: {origin_rule_name}")
+                else:
+                    print(f"   ⚠️ Warning: Failed to create Origin Rule")
 
 
     # Only clean up old random records if we are in random mode
@@ -1843,28 +1896,33 @@ def turn_on_service(service_id, force=False, actor=None):
     db.update_service_status(service_id, True, full_hostname, random_port)
 
     # Sync UniFi Groups (add this service's IP/Port)
-    sync_unifi_groups(session=unifi_session, base_url=unifi_base_url)
+    if routing_mode == 'unifi':
+        sync_unifi_groups(session=unifi_session, base_url=unifi_base_url)
 
-    # Check if port is open (brief delay to allow firewall rule to propagate)
-    print("🔹 Verifying port accessibility...")
-    time.sleep(1)  # Brief 1-second delay to allow firewall rule to propagate
-    port_check = check_port_open(random_port, session=unifi_session, base_url=unifi_base_url)
-    
-    if unifi_session:
-        logout_unifi(unifi_session, unifi_base_url)
-    
-    port_open = port_check.get("open")
-    if port_open is True:
-        print(f"✅ Port {random_port} verified as accessible")
-        port_status = "verified"
-    elif port_open is None:
-        error_msg = port_check.get("error", "Unknown error")
-        print(f"⚠️ Port status unknown: {error_msg}")
-        port_status = "unknown"
+        # Check if port is open (brief delay to allow firewall rule to propagate)
+        print("🔹 Verifying port accessibility...")
+        time.sleep(1)  # Brief 1-second delay to allow firewall rule to propagate
+        port_check = check_port_open(random_port, session=unifi_session, base_url=unifi_base_url)
+        
+        if unifi_session:
+            logout_unifi(unifi_session, unifi_base_url)
+        
+        port_open = port_check.get("open")
+        if port_open is True:
+            print(f"✅ Port {random_port} verified as accessible")
+            port_status = "verified"
+        elif port_open is None:
+            error_msg = port_check.get("error", "Unknown error")
+            print(f"⚠️ Port status unknown: {error_msg}")
+            port_status = "unknown"
+        else:
+            error_msg = port_check.get("error", "Unknown error")
+            print(f"⚠️ Port verification failed: {error_msg}")
+            port_status = "unverified"
     else:
-        error_msg = port_check.get("error", "Unknown error")
-        print(f"⚠️ Port verification failed: {error_msg}")
-        port_status = "unverified"
+        # For VPS mode, we can't easily check port open status from here (it's remote)
+        # unless we probe it from outside or trust the SSH command.
+        port_status = "assumed_open"
 
     print(f"✅ SUCCESS! {service['name']} live at: https://{full_hostname} (Port: {random_port})\n")
     
@@ -3428,10 +3486,28 @@ def api_clear_redis_routes():
             # redis-py delete needs positional arguments
             r.delete(*keys)
             return jsonify({"message": f"Successfully cleared {len(keys)} Traefik entries from Redis"})
-        else:
-            return jsonify({"message": "No Traefik entries found in Redis"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test/vps-ssh', methods=['POST'])
+@login_required
+def test_vps_ssh():
+    """Test VPS SSH connection"""
+    data = request.json
+    host = data.get('host')
+    user = data.get('user')
+    port = data.get('port', 22)
+    key = data.get('key')
+    
+    if not all([host, user, key]):
+        return jsonify({"error": "Missing required fields"}), 400
+        
+    success, message = routing.VPSManager.test_connection(host, user, port, key)
+    
+    if success:
+        return jsonify({"message": message})
+    else:
+        return jsonify({"error": message}), 500
 
 @app.route('/api/test/hass', methods=['POST'])
 @login_required

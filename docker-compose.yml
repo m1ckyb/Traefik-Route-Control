@@ -5,6 +5,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=UTC
+    cap_add:
+      - NET_ADMIN
     # Volume for persistent database storage
     volumes:
       - routeghost_data:/app/data

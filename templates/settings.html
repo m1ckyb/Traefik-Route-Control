@@ -13,6 +13,7 @@
             <button type="button" class="tab-btn active" onclick="openTab(event, 'tab-security')">Security</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-monitoring')">Monitoring</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-infrastructure')">Infrastructure</button>
+            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-vps')">VPS / WireGuard</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-integrations')">Integrations</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-system')">System Info</button>
         </div>
@@ -317,6 +318,66 @@
                 </div>
             </div>
         </div>
+        </div>
+        
+        <!-- Tab: VPS / WireGuard -->
+        <div id="tab-vps" class="tab-content" style="display: none;">
+            <div class="form-group">
+                <label for="ROUTING_MODE">Routing Mode <span class="tooltip-icon" data-tooltip="Select the architecture mode">ℹ️</span></label>
+                <select id="ROUTING_MODE" name="ROUTING_MODE" onchange="toggleVpsSettings()">
+                    <option value="unifi" {% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}selected{% endif %}>Cloudflare Proxy + UniFi (Legacy)</option>
+                    <option value="vps" {% if settings.get('ROUTING_MODE', 'unifi') == 'vps' %}selected{% endif %}>VPS Gateway + WireGuard (Ghost Mode)</option>
+                </select>
+            </div>
+
+            <div id="vps-settings" style="{% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}display: none;{% else %}display: block;{% endif %}">
+                <h3>VPS Connection (SSH)</h3>
+                <div class="settings-grid-2-col">
+                    <div class="form-group">
+                        <label for="VPS_HOST">VPS Hostname / IP</label>
+                        <input type="text" id="VPS_HOST" name="VPS_HOST" value="{{ settings.get('VPS_HOST', '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="VPS_SSH_USER">SSH Username</label>
+                        <input type="text" id="VPS_SSH_USER" name="VPS_SSH_USER" value="{{ settings.get('VPS_SSH_USER', 'root') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="VPS_SSH_PORT">SSH Port</label>
+                        <input type="number" id="VPS_SSH_PORT" name="VPS_SSH_PORT" value="{{ settings.get('VPS_SSH_PORT', '22') }}">
+                    </div>
+                    <div class="form-group" style="grid-column: span 2;">
+                        <label for="VPS_SSH_KEY">SSH Private Key (OpenSSH Format)</label>
+                        <textarea id="VPS_SSH_KEY" name="VPS_SSH_KEY" rows="5" style="width: 100%; font-family: monospace; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 4px;">{{ settings.get('VPS_SSH_KEY', '') }}</textarea>
+                    </div>
+                    <div class="form-group">
+                         <button type="button" class="btn btn-secondary" onclick="testVpsSsh(event)">🔑 Test SSH Connection</button>
+                    </div>
+                </div>
+
+                <h3>WireGuard Configuration</h3>
+                <div class="settings-grid-2-col">
+                    <div class="form-group">
+                        <label for="WG_CLIENT_ADDRESS">Local Interface IP (Address)</label>
+                        <input type="text" id="WG_CLIENT_ADDRESS" name="WG_CLIENT_ADDRESS" value="{{ settings.get('WG_CLIENT_ADDRESS', '10.0.0.2/24') }}" placeholder="10.0.0.2/24">
+                    </div>
+                     <div class="form-group">
+                        <label for="WG_PRIVATE_KEY">Local Private Key</label>
+                        <input type="password" id="WG_PRIVATE_KEY" name="WG_PRIVATE_KEY" value="{{ settings.get('WG_PRIVATE_KEY', '') }}" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="WG_SERVER_ENDPOINT">Remote Endpoint (IP:Port)</label>
+                        <input type="text" id="WG_SERVER_ENDPOINT" name="WG_SERVER_ENDPOINT" value="{{ settings.get('WG_SERVER_ENDPOINT', '') }}" placeholder="1.2.3.4:51820">
+                    </div>
+                    <div class="form-group">
+                        <label for="WG_SERVER_PUBLIC_KEY">Remote Public Key</label>
+                        <input type="text" id="WG_SERVER_PUBLIC_KEY" name="WG_SERVER_PUBLIC_KEY" value="{{ settings.get('WG_SERVER_PUBLIC_KEY', '') }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="WG_ALLOWED_IPS">Allowed IPs</label>
+                        <input type="text" id="WG_ALLOWED_IPS" name="WG_ALLOWED_IPS" value="{{ settings.get('WG_ALLOWED_IPS', '0.0.0.0/0') }}">
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Tab: Integrations -->
@@ -1059,6 +1120,62 @@ function syncFirewall() {
                 else showToast(data.message || 'Sync triggered. Check logs for details.', 'success');
             })
             .catch(err => showToast('Error: ' + err.message, 'error'));
+    }
+}
+
+function toggleVpsSettings() {
+    const mode = document.getElementById('ROUTING_MODE').value;
+    const vpsSettings = document.getElementById('vps-settings');
+    
+    if (mode === 'vps') {
+        vpsSettings.style.display = 'block';
+    } else {
+        vpsSettings.style.display = 'none';
+    }
+}
+
+async function testVpsSsh(event) {
+    const host = document.getElementById('VPS_HOST').value;
+    const user = document.getElementById('VPS_SSH_USER').value;
+    const port = document.getElementById('VPS_SSH_PORT').value;
+    const key = document.getElementById('VPS_SSH_KEY').value;
+
+    if (!host || !user || !key) {
+        showToast('Please enter Host, User, and Private Key', 'warning');
+        return;
+    }
+
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/test/vps-ssh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                host: host,
+                user: user,
+                port: port,
+                key: key
+            })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Connection failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
     }
 }
 
