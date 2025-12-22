@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22] - 2025-12-22
+
+### Changed
+- Refactored `main.py` to remove legacy CLI code and `argparse` dependency.
+- Hardened `static/js/main.js` against XSS by sanitizing inputs in `showDiagnosticsModal`.
+- Home Assistant config modal now uses a clearer placeholder for API keys and prevents password manager interference.
+
+### Fixed
+- Reverted API Key selection flow in HASS modal to simplify the user experience (removed misleading "Authorize" flow).
+
+### Removed
+- Removed legacy `cmd_on` and `cmd_off` functions from `main.py`.
+
 ## [0.0.21] - 2025-12-22
 
 ### Added
