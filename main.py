@@ -2663,7 +2663,29 @@ def index():
     if rule_info and rule_info.get("enabled") is False:
         firewall_enabled = False
         
-    return render_template('index.html', services=services, settings=settings, firewall_enabled=firewall_enabled)
+    # Get API keys for HASS config generator
+    api_keys = db.get_api_keys_for_user(current_user.id)
+        
+    return render_template('index.html', services=services, settings=settings, firewall_enabled=firewall_enabled, api_keys=api_keys)
+
+@app.route('/api/auth/verify', methods=['POST'])
+@login_required
+def api_verify_password():
+    """Verify password for sensitive operations."""
+    data = request.get_json()
+    password = data.get('password')
+    
+    if not password:
+        return jsonify({'error': 'Password required'}), 400
+        
+    user = db.get_user(current_user.id)
+    if not user.get('password_hash'):
+         return jsonify({'error': 'No password set'}), 400
+         
+    if check_password_hash(user['password_hash'], password):
+        return jsonify({'success': True})
+    
+    return jsonify({'error': 'Invalid password'}), 403
 
 @app.route('/onboarding', methods=['GET'])
 @login_required
