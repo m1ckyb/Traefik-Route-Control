@@ -1,9 +1,9 @@
 ### Added
 
 ### Changed
-- Home Assistant config modal now uses a clearer placeholder for API keys and prevents password manager interference.
+- Home Assistant config modal now prevents password manager interference.
 
 ### Fixed
-- Removed misleading "Authorize" flow for API keys in HASS modal (keys are hashed and cannot be revealed).
+- Reverted API Key selection flow in HASS modal to simplify the user experience.
 
 ### Removed

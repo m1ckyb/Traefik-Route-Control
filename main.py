@@ -2663,10 +2663,7 @@ def index():
     if rule_info and rule_info.get("enabled") is False:
         firewall_enabled = False
         
-    # Get API keys for HASS config generator
-    api_keys = db.get_api_keys_for_user(current_user.id)
-        
-    return render_template('index.html', services=services, settings=settings, firewall_enabled=firewall_enabled, api_keys=api_keys)
+    return render_template('index.html', services=services, settings=settings, firewall_enabled=firewall_enabled)
 
 @app.route('/onboarding', methods=['GET'])
 @login_required

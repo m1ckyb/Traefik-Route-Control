@@ -339,12 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (hassBaseUrlInput) {
         hassBaseUrlInput.addEventListener('input', updateHassConfig);
     }
-    
-    // Attach event listener to API Key Select
-    const hassApiKeySelect = document.getElementById('hass-api-key-select');
-    if (hassApiKeySelect) {
-        hassApiKeySelect.addEventListener('change', updateHassConfig);
-    }
 });
 
 // Home Assistant Modal functions
@@ -354,10 +348,6 @@ function showHassModal(serviceId, serviceName) {
     // Store context in modal dataset
     modal.dataset.serviceId = serviceId;
     modal.dataset.serviceName = serviceName;
-    
-    // Reset selection
-    const keySelect = document.getElementById('hass-api-key-select');
-    if (keySelect) keySelect.value = "";
     
     // Set default Base URL if empty
     const baseUrlInput = document.getElementById('hass-base-url');
@@ -408,14 +398,6 @@ function updateHassConfig() {
     const serviceName = modal.dataset.serviceName;
     const baseUrl = document.getElementById('hass-base-url').value.replace(/\/$/, ''); // Remove trailing slash
     
-    // Determine API Key placeholder
-    let apiKeyPlaceholder = 'your-api-key-here';
-    const keySelect = document.getElementById('hass-api-key-select');
-    if (keySelect && keySelect.value) {
-        // Use a clear placeholder that indicates the user needs to replace it
-        apiKeyPlaceholder = `REPLACE_WITH_SECRET_FOR_${keySelect.value}`;
-    }
-    
     // Sanitize service name for YAML - remove special characters and normalize spaces
     const serviceNameSlug = serviceName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const safeServiceName = serviceName.replace(/['"]/g, ''); // Remove quotes from display name
@@ -426,9 +408,9 @@ function updateHassConfig() {
     
     // Note: serviceId is always numeric (INTEGER PRIMARY KEY from database)
     const hassConfig = `- switch:
-    command_on: "curl -X POST -s -H 'X-API-Key: ${apiKeyPlaceholder}' ${baseUrl}/api/services/${serviceId}/on"
-    command_off: "curl -X POST -s -H 'X-API-Key: ${apiKeyPlaceholder}' ${baseUrl}/api/services/${serviceId}/off"
-    command_state: "curl -s -H 'X-API-Key: ${apiKeyPlaceholder}' ${baseUrl}/api/services/${serviceId}/status"
+    command_on: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/on"
+    command_off: "curl -X POST -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/off"
+    command_state: "curl -s -H 'X-API-Key: your-api-key-here' ${baseUrl}/api/services/${serviceId}/status"
     value_template: "${jinjaOpen} value_json.status == 'ONLINE' ${jinjaClose}"
     unique_id: "traefik_${serviceNameSlug}"
     name: "traefik ${safeServiceName}"`;
