@@ -263,13 +263,8 @@
                 <div class="settings-grid-2-col">
                     <div class="form-group">
                         <label for="CF_API_TOKEN">Cloudflare API Token <span class="tooltip-icon" data-tooltip="Token with Zone:DNS:Edit permissions">ℹ️</span></label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
-                                   value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off" style="flex: 1;">
-                            {% if settings.get('CF_API_TOKEN') == '********' %}
-                            <button type="button" id="btn-reveal-CF_API_TOKEN" class="btn btn-secondary" onclick="revealSecret('CF_API_TOKEN')" title="Reveal">👁️</button>
-                            {% endif %}
-                        </div>
+                        <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                               value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
                     </div>
                     
                     <div class="form-group">
@@ -314,13 +309,8 @@
             
             <div class="form-group">
                 <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
-                           value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off" style="flex: 1;">
-                    {% if settings.get('REDIS_PASS') == '********' %}
-                    <button type="button" id="btn-reveal-REDIS_PASS" class="btn btn-secondary" onclick="revealSecret('REDIS_PASS')" title="Reveal">👁️</button>
-                    {% endif %}
-                </div>
+                <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                       value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
                 <div style="margin-top: 0.5rem; display: flex; gap: 10px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
                     <button type="button" class="btn btn-danger" onclick="clearRedisRoutes()">🗑️ Clear Traefik Routes from Redis</button>
@@ -359,13 +349,8 @@
             
             <div class="form-group">
                 <label for="HASS_TOKEN">Home Assistant Token <span class="tooltip-icon" data-tooltip="Long-Lived Access Token from Home Assistant">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
-                           value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off" style="flex: 1;">
-                    {% if settings.get('HASS_TOKEN') == '********' %}
-                    <button type="button" id="btn-reveal-HASS_TOKEN" class="btn btn-secondary" onclick="revealSecret('HASS_TOKEN')" title="Reveal">👁️</button>
-                    {% endif %}
-                </div>
+                <input type="password" id="HASS_TOKEN" name="HASS_TOKEN" 
+                       value="{{ settings.get('HASS_TOKEN', '') }}" autocomplete="off">
             </div>
 
             <div class="form-group">
@@ -399,13 +384,8 @@
             
             <div class="form-group">
                 <label for="UNIFI_PASS">UniFi Password <span class="tooltip-icon" data-tooltip="Local admin password for UniFi">ℹ️</span></label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
-                           value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off" style="flex: 1;">
-                    {% if settings.get('UNIFI_PASS') == '********' %}
-                    <button type="button" id="btn-reveal-UNIFI_PASS" class="btn btn-secondary" onclick="revealSecret('UNIFI_PASS')" title="Reveal">👁️</button>
-                    {% endif %}
-                </div>
+                <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
+                       value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
             </div>
             
             <div class="form-group">
@@ -582,84 +562,9 @@
     </div>
 </div>
 
-<!-- Reveal Secret Modal -->
-<div id="reveal-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Verify Identity</h3>
-            <span class="modal-close" onclick="hideRevealModal()">&times;</span>
-        </div>
-        <div class="modal-body">
-            <p>Please enter your password to reveal this setting.</p>
-            <div class="form-group">
-                <input type="password" id="reveal-password" placeholder="Password" style="width: 100%;">
-            </div>
-            <div class="modal-buttons">
-                <button type="button" class="btn btn-secondary" onclick="hideRevealModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="confirmReveal()">Reveal</button>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <script>
-let currentRevealKey = null;
-
-function revealSecret(key) {
-    currentRevealKey = key;
-    document.getElementById('reveal-password').value = '';
-    document.getElementById('reveal-modal').style.display = 'flex';
-    document.getElementById('reveal-password').focus();
-}
-
-function hideRevealModal() {
-    document.getElementById('reveal-modal').style.display = 'none';
-    currentRevealKey = null;
-}
-
-async function confirmReveal() {
-    const password = document.getElementById('reveal-password').value;
-    if (!password) return;
-    
-    try {
-        const response = await fetch('/auth/reveal', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
-            body: JSON.stringify({
-                key: currentRevealKey,
-                password: password
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            const input = document.getElementById(currentRevealKey);
-            if (input) {
-                input.value = data.value;
-                input.type = 'text'; // Reveal it
-                const btn = document.getElementById('btn-reveal-' + currentRevealKey);
-                if (btn) btn.style.display = 'none';
-            }
-            hideRevealModal();
-        } else {
-            showToast('Error: ' + (data.error || 'Verification failed'), 'error');
-        }
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
-}
-
-// Allow Enter key in modal
-document.getElementById('reveal-password').addEventListener('keyup', function(event) {
-    if (event.key === 'Enter') {
-        confirmReveal();
-    }
-});
-
 // WebAuthn Helpers
 function arrayBufferToBase64(buffer) {
     const binary = Array.from(new Uint8Array(buffer), byte => String.fromCharCode(byte)).join('');

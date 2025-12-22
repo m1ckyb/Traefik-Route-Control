@@ -2692,40 +2692,6 @@ ALLOWED_USER_SETTINGS = {
     'ENFORCE_2FA',
 }
 
-# Settings that should be masked in the UI and require re-auth to reveal
-SENSITIVE_SETTINGS = {
-    'HASS_TOKEN', 'CF_API_TOKEN', 'UNIFI_PASS', 'REDIS_PASS'
-}
-
-@app.route('/auth/reveal', methods=['POST'])
-@login_required
-def reveal_secret():
-    """Reveal a sensitive setting value after password verification."""
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-        
-    password = data.get('password')
-    key = data.get('key')
-    
-    if not password or not key:
-        return jsonify({'error': 'Password and key are required'}), 400
-        
-    if key not in SENSITIVE_SETTINGS:
-        return jsonify({'error': 'Invalid key'}), 400
-        
-    # Verify password
-    user = db.get_user(current_user.id)
-    if not user.get('password_hash'):
-         return jsonify({'error': 'No password set for this user'}), 400
-         
-    if not check_password_hash(user['password_hash'], password):
-         return jsonify({'error': 'Invalid password'}), 403
-         
-    # Return real value
-    real_value = db.get_setting(key, '')
-    return jsonify({'value': real_value})
-
 @app.route('/onboarding/complete', methods=['POST'])
 @login_required
 def onboarding_complete():
@@ -2736,10 +2702,6 @@ def onboarding_complete():
         rejected_count = 0
         for key in request.form:
             if key in ALLOWED_USER_SETTINGS:
-                # Skip masked values
-                if key in SENSITIVE_SETTINGS and request.form[key] == '********':
-                    continue
-                    
                 db.set_setting(key, request.form[key])
                 saved_count += 1
             else:
@@ -2865,10 +2827,6 @@ def settings():
             rejected_count = 0
             for key in request.form:
                 if key in ALLOWED_USER_SETTINGS:
-                    # Skip masked values
-                    if key in SENSITIVE_SETTINGS and request.form[key] == '********':
-                        continue
-                        
                     db.set_setting(key, request.form[key])
                     saved_count += 1
                 else:
@@ -2885,11 +2843,6 @@ def settings():
             flash('An unexpected error occurred while saving settings. Please try again.', 'error')
     
     settings = db.get_all_settings()
-    
-    # Mask sensitive data
-    for key in SENSITIVE_SETTINGS:
-        if settings.get(key):
-            settings[key] = "********"
     
     # Add user info for credential management
     user = db.get_user(current_user.id)
