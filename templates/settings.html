@@ -13,7 +13,6 @@
             <button type="button" class="tab-btn active" onclick="openTab(event, 'tab-security')">Security</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-monitoring')">Monitoring</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-infrastructure')">Infrastructure</button>
-            <button type="button" class="tab-btn" onclick="openTab(event, 'tab-vps')">VPS / WireGuard</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-integrations')">Integrations</button>
             <button type="button" class="tab-btn" onclick="openTab(event, 'tab-system')">System Info</button>
         </div>
@@ -260,6 +259,16 @@
 
         <!-- Tab: Infrastructure -->
         <div id="tab-infrastructure" class="tab-content" style="display: none;">
+            <div class="form-group">
+                <label for="ROUTING_MODE">Routing Mode <span class="tooltip-icon" data-tooltip="Select the architecture mode">ℹ️</span></label>
+                <select id="ROUTING_MODE" name="ROUTING_MODE" onchange="toggleInfrastructureSettings()">
+                    <option value="unifi" {% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}selected{% endif %}>Cloudflare Proxy + UniFi</option>
+                    <option value="vps" {% if settings.get('ROUTING_MODE', 'unifi') == 'vps' %}selected{% endif %}>VPS Gateway + WireGuard</option>
+                </select>
+            </div>
+
+            <!-- Mode: Cloudflare + UniFi -->
+            <div id="infra-mode-unifi" style="{% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}display: block;{% else %}display: none;{% endif %}">
                 <h3>Cloudflare</h3>
                 <div class="settings-grid-2-col">
                     <div class="form-group">
@@ -292,45 +301,90 @@
                     <div class="form-group">
                         <button type="button" class="btn btn-secondary" onclick="testCloudflareConnection(event)">☁️ Test Cloudflare Connection</button>
                     </div>
-                </div>        
-        <h3>Traefik / Redis</h3>
-        <div class="settings-grid-2-col">
-            <div class="form-group">
-                <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
-                <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
-                       value="{{ settings.get('REDIS_HOST', '') }}"
-                       placeholder="127.0.0.1">
-            </div>
-            
-            <div class="form-group">
-                <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
-                <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
-                       value="{{ settings.get('REDIS_PORT', '6379') }}">
-            </div>
-            
-            <div class="form-group">
-                <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
-                <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
-                       value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
-                <div style="margin-top: 0.5rem; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
-                    <button type="button" class="btn btn-danger" onclick="clearRedisRoutes()">🗑️ Clear Traefik Routes from Redis</button>
+                </div>
+
+                <h3>UniFi Controller</h3>
+                <div class="form-group">
+                    <label for="FIREWALL_TYPE">Firewall Controller Type <span class="tooltip-icon" data-tooltip="System used to manage firewall rules">ℹ️</span></label>
+                    <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleFirewallSettings()">
+                        <option value="none" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}selected{% endif %}>None</option>
+                        <option value="unifi" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'unifi' %}selected{% endif %}>UniFi</option>
+                    </select>
+                </div>
+                
+                <div id="unifi-settings" class="settings-grid-2-col" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% else %}display: grid;{% endif %}">
+                    <div class="form-group">
+                        <label for="UNIFI_HOST">UniFi Host <span class="tooltip-icon" data-tooltip="IP address or hostname of UniFi Controller/Console">ℹ️</span></label>
+                        <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
+                            value="{{ settings.get('UNIFI_HOST', '') }}"
+                            placeholder="192.168.1.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_USER">UniFi Username <span class="tooltip-icon" data-tooltip="Local admin username for UniFi">ℹ️</span></label>
+                        <input type="text" id="UNIFI_USER" name="UNIFI_USER" 
+                            value="{{ settings.get('UNIFI_USER', '') }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_PASS">UniFi Password <span class="tooltip-icon" data-tooltip="Local admin password for UniFi">ℹ️</span></label>
+                        <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
+                            value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name <span class="tooltip-icon" data-tooltip="Name of the Port Forward rule to toggle">ℹ️</span></label>
+                        <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
+                            value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
+                            placeholder="External">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group) <span class="tooltip-icon" data-tooltip="UniFi Address Group to sync active service IPs to">ℹ️</span></label>
+                        <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
+                            value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
+                            placeholder="VLAN 50 Allowed IPs">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group) <span class="tooltip-icon" data-tooltip="UniFi Port Group to sync active service ports to">ℹ️</span></label>
+                        <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
+                            value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
+                            placeholder="VLAN 50 Allowed Ports">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="TRAEFIK_LAN_CIDR">Traefik LAN CIDR (Excluded from IP List) <span class="tooltip-icon" data-tooltip="Subnet to exclude from IP group (e.g. if Traefik is local)">ℹ️</span></label>
+                        <input type="text" id="TRAEFIK_LAN_CIDR" name="TRAEFIK_LAN_CIDR" 
+                            value="{{ settings.get('TRAEFIK_LAN_CIDR', '') }}"
+                            pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/(3[0-2]|[12]?[0-9]))?$"
+                            title="Please enter a valid IPv4 address or CIDR (e.g. 192.168.1.1 or 192.168.1.0/24)"
+                            placeholder="192.168.50.0/24">
+                        <div style="margin-top: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="syncFirewall()">🔄 Sync Firewall Groups Now</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes.">ℹ️</span></label>
+                        <select id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL">
+                            <option value="0" {% if settings.get('PORT_ROTATION_INTERVAL', '0') == '0' %}selected{% endif %}>Disabled</option>
+                            {% for i in range(30, 510, 30) %}
+                            <option value="{{ i }}" {% if settings.get('PORT_ROTATION_INTERVAL', '0')|int == i %}selected{% endif %}>
+                                {% if i >= 60 %}
+                                    {{ i // 60 }} hour{% if i // 60 > 1 %}s{% endif %}{% if i % 60 > 0 %} {{ i % 60 }} mins{% endif %}
+                                {% else %}
+                                    {{ i }} minutes
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
             </div>
-        </div>
-        </div>
-        
-        <!-- Tab: VPS / WireGuard -->
-        <div id="tab-vps" class="tab-content" style="display: none;">
-            <div class="form-group">
-                <label for="ROUTING_MODE">Routing Mode <span class="tooltip-icon" data-tooltip="Select the architecture mode">ℹ️</span></label>
-                <select id="ROUTING_MODE" name="ROUTING_MODE" onchange="toggleVpsSettings()">
-                    <option value="unifi" {% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}selected{% endif %}>Cloudflare Proxy + UniFi (Legacy)</option>
-                    <option value="vps" {% if settings.get('ROUTING_MODE', 'unifi') == 'vps' %}selected{% endif %}>VPS Gateway + WireGuard (Ghost Mode)</option>
-                </select>
-            </div>
 
-            <div id="vps-settings" style="{% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}display: none;{% else %}display: block;{% endif %}">
+            <!-- Mode: VPS + WireGuard -->
+            <div id="infra-mode-vps" style="{% if settings.get('ROUTING_MODE', 'unifi') == 'vps' %}display: block;{% else %}display: none;{% endif %}">
                 <h3>VPS Connection (SSH)</h3>
                 <div class="settings-grid-2-col">
                     <div class="form-group">
@@ -380,6 +434,8 @@
             </div>
         </div>
         
+
+        
         <!-- Tab: Integrations -->
         <div id="tab-integrations" class="tab-content" style="display: none;">
         <div class="form-group heading-with-switch">
@@ -419,83 +475,29 @@
             </div>
         </div>
         
-        <h3>Firewall</h3>
-        
-        <div class="form-group">
-            <label for="FIREWALL_TYPE">Firewall Controller Type <span class="tooltip-icon" data-tooltip="System used to manage firewall rules">ℹ️</span></label>
-            <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleFirewallSettings()">
-                <option value="none" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}selected{% endif %}>None</option>
-                <option value="unifi" {% if settings.get('FIREWALL_TYPE', 'unifi') == 'unifi' %}selected{% endif %}>UniFi</option>
-            </select>
-        </div>
-        
-        <div id="unifi-settings" style="{% if settings.get('FIREWALL_TYPE', 'unifi') == 'none' %}display: none;{% else %}display: grid;{% endif %}">
+        <h3>Traefik / Redis</h3>
+        <div class="settings-grid-2-col">
             <div class="form-group">
-                <label for="UNIFI_HOST">UniFi Host <span class="tooltip-icon" data-tooltip="IP address or hostname of UniFi Controller/Console">ℹ️</span></label>
-                <input type="text" id="UNIFI_HOST" name="UNIFI_HOST" 
-                       value="{{ settings.get('UNIFI_HOST', '') }}"
-                       placeholder="192.168.1.1">
+                <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
+                <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                       value="{{ settings.get('REDIS_HOST', '') }}"
+                       placeholder="127.0.0.1">
             </div>
             
             <div class="form-group">
-                <label for="UNIFI_USER">UniFi Username <span class="tooltip-icon" data-tooltip="Local admin username for UniFi">ℹ️</span></label>
-                <input type="text" id="UNIFI_USER" name="UNIFI_USER" 
-                       value="{{ settings.get('UNIFI_USER', '') }}">
+                <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
+                <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                       value="{{ settings.get('REDIS_PORT', '6379') }}">
             </div>
             
             <div class="form-group">
-                <label for="UNIFI_PASS">UniFi Password <span class="tooltip-icon" data-tooltip="Local admin password for UniFi">ℹ️</span></label>
-                <input type="password" id="UNIFI_PASS" name="UNIFI_PASS" 
-                       value="{{ settings.get('UNIFI_PASS', '') }}" autocomplete="off">
-            </div>
-            
-            <div class="form-group">
-                <label for="UNIFI_RULE_NAME">UniFi Port Forward Rule Name <span class="tooltip-icon" data-tooltip="Name of the Port Forward rule to toggle">ℹ️</span></label>
-                <input type="text" id="UNIFI_RULE_NAME" name="UNIFI_RULE_NAME" 
-                       value="{{ settings.get('UNIFI_RULE_NAME', '') }}"
-                       placeholder="External">
-            </div>
-
-            <div class="form-group">
-                <label for="UNIFI_IP_GROUP_NAME">Allowed IPs List (Address Group) <span class="tooltip-icon" data-tooltip="UniFi Address Group to sync active service IPs to">ℹ️</span></label>
-                <input type="text" id="UNIFI_IP_GROUP_NAME" name="UNIFI_IP_GROUP_NAME" 
-                       value="{{ settings.get('UNIFI_IP_GROUP_NAME', '') }}"
-                       placeholder="VLAN 50 Allowed IPs">
-            </div>
-
-            <div class="form-group">
-                <label for="UNIFI_PORT_GROUP_NAME">Allowed Ports List (Port Group) <span class="tooltip-icon" data-tooltip="UniFi Port Group to sync active service ports to">ℹ️</span></label>
-                <input type="text" id="UNIFI_PORT_GROUP_NAME" name="UNIFI_PORT_GROUP_NAME" 
-                       value="{{ settings.get('UNIFI_PORT_GROUP_NAME', '') }}"
-                       placeholder="VLAN 50 Allowed Ports">
-            </div>
-
-            <div class="form-group">
-                <label for="TRAEFIK_LAN_CIDR">Traefik LAN CIDR (Excluded from IP List) <span class="tooltip-icon" data-tooltip="Subnet to exclude from IP group (e.g. if Traefik is local)">ℹ️</span></label>
-                <input type="text" id="TRAEFIK_LAN_CIDR" name="TRAEFIK_LAN_CIDR" 
-                       value="{{ settings.get('TRAEFIK_LAN_CIDR', '') }}"
-                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/(3[0-2]|[12]?[0-9]))?$"
-                       title="Please enter a valid IPv4 address or CIDR (e.g. 192.168.1.1 or 192.168.1.0/24)"
-                       placeholder="192.168.50.0/24">
-                <div style="margin-top: 0.5rem;">
-                    <button type="button" class="btn btn-secondary" onclick="syncFirewall()">🔄 Sync Firewall Groups Now</button>
+                <label for="REDIS_PASS">Redis Password (optional) <span class="tooltip-icon" data-tooltip="Password if Redis authentication is enabled">ℹ️</span></label>
+                <input type="password" id="REDIS_PASS" name="REDIS_PASS" 
+                       value="{{ settings.get('REDIS_PASS', '') }}" autocomplete="off">
+                <div style="margin-top: 0.5rem; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary" onclick="testRedisConnection(event)">🔌 Test Redis Connection</button>
+                    <button type="button" class="btn btn-danger" onclick="clearRedisRoutes()">🗑️ Clear Traefik Routes from Redis</button>
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label for="PORT_ROTATION_INTERVAL">Port Rotation Interval <span class="tooltip-icon" data-tooltip="Automatically rotate the external firewall port every X minutes.">ℹ️</span></label>
-                <select id="PORT_ROTATION_INTERVAL" name="PORT_ROTATION_INTERVAL">
-                    <option value="0" {% if settings.get('PORT_ROTATION_INTERVAL', '0') == '0' %}selected{% endif %}>Disabled</option>
-                    {% for i in range(30, 510, 30) %}
-                    <option value="{{ i }}" {% if settings.get('PORT_ROTATION_INTERVAL', '0')|int == i %}selected{% endif %}>
-                        {% if i >= 60 %}
-                            {{ i // 60 }} hour{% if i // 60 > 1 %}s{% endif %}{% if i % 60 > 0 %} {{ i % 60 }} mins{% endif %}
-                        {% else %}
-                            {{ i }} minutes
-                        {% endif %}
-                    </option>
-                    {% endfor %}
-                </select>
             </div>
         </div>
         </div>
@@ -1123,14 +1125,17 @@ function syncFirewall() {
     }
 }
 
-function toggleVpsSettings() {
+function toggleInfrastructureSettings() {
     const mode = document.getElementById('ROUTING_MODE').value;
-    const vpsSettings = document.getElementById('vps-settings');
+    const unifiMode = document.getElementById('infra-mode-unifi');
+    const vpsMode = document.getElementById('infra-mode-vps');
     
     if (mode === 'vps') {
-        vpsSettings.style.display = 'block';
+        unifiMode.style.display = 'none';
+        vpsMode.style.display = 'block';
     } else {
-        vpsSettings.style.display = 'none';
+        unifiMode.style.display = 'block';
+        vpsMode.style.display = 'none';
     }
 }
 

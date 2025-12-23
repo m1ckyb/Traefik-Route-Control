@@ -9,6 +9,11 @@
 - **Whitelist**: Expanded `ALLOWED_USER_SETTINGS` to include new VPS configuration keys.
 
 ### Changed
+- Refactored Settings UI:
+    - Moved Traefik and Redis settings to the "Integrations" tab.
+    - Consolidated "VPS / WireGuard" tab into "Infrastructure" tab.
+    - Added "Routing Mode" dropdown to "Infrastructure" tab to toggle between "Cloudflare + UniFi" and "VPS + WireGuard" settings.
+    - Moved UniFi firewall settings to "Infrastructure" tab under "Cloudflare + UniFi" mode.
 
 ### Fixed
 
