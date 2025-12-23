@@ -262,7 +262,7 @@
             <div class="form-group">
                 <label for="ROUTING_MODE">Routing Mode <span class="tooltip-icon" data-tooltip="Select the architecture mode">ℹ️</span></label>
                 <select id="ROUTING_MODE" name="ROUTING_MODE" onchange="toggleInfrastructureSettings()">
-                    <option value="unifi" {% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}selected{% endif %}>Cloudflare Proxy + UniFi</option>
+                    <option value="unifi" {% if settings.get('ROUTING_MODE', 'unifi') == 'unifi' %}selected{% endif %}>Cloudflare + Firewall</option>
                     <option value="vps" {% if settings.get('ROUTING_MODE', 'unifi') == 'vps' %}selected{% endif %}>VPS Gateway + WireGuard</option>
                 </select>
             </div>
@@ -303,7 +303,7 @@
                     </div>
                 </div>
 
-                <h3>UniFi Controller</h3>
+                <h3>Firewall Controller</h3>
                 <div class="form-group">
                     <label for="FIREWALL_TYPE">Firewall Controller Type <span class="tooltip-icon" data-tooltip="System used to manage firewall rules">ℹ️</span></label>
                     <select id="FIREWALL_TYPE" name="FIREWALL_TYPE" onchange="toggleFirewallSettings()">

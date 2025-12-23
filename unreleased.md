@@ -12,8 +12,9 @@
 - Refactored Settings UI:
     - Moved Traefik and Redis settings to the "Integrations" tab.
     - Consolidated "VPS / WireGuard" tab into "Infrastructure" tab.
-    - Added "Routing Mode" dropdown to "Infrastructure" tab to toggle between "Cloudflare + UniFi" and "VPS + WireGuard" settings.
-    - Moved UniFi firewall settings to "Infrastructure" tab under "Cloudflare + UniFi" mode.
+    - Added "Routing Mode" dropdown to "Infrastructure" tab to toggle between "Cloudflare + Firewall" and "VPS + WireGuard" settings.
+    - Moved Firewall settings to "Infrastructure" tab under "Cloudflare + Firewall" mode.
+    - Renamed "UniFi Controller" section to "Firewall Controller" in settings.
 
 ### Fixed
 
