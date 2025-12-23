@@ -164,7 +164,7 @@
                     statusText = 'Closed';
                 }
                 
-                navFirewallStatus.innerHTML = statusText;
+                navFirewallStatus.textContent = statusText;
                 navFirewallStatus.className = statusClass;
 
                 // Update Dashboard Buttons
@@ -202,7 +202,7 @@
                 }
             })
             .catch(err => {
-                navFirewallStatus.innerHTML = 'ERROR';
+                navFirewallStatus.textContent = 'ERROR';
                 navFirewallStatus.className = 'status-badge status-unknown';
             });
     };
