@@ -243,6 +243,9 @@ body > .container {
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .service-header {
@@ -330,6 +333,7 @@ body > .container {
 
 .service-info {
     margin-bottom: 1rem;
+    flex: 1;
 }
 
 .info-row {
@@ -372,7 +376,7 @@ body > .container {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-    margin-top: 1rem;
+    margin-top: auto;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
 }

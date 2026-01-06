@@ -31,7 +31,7 @@ cd RouteGhost
     ```
 
 3.  **Initial Setup (5-minute window)**:
-    *   Access `http://localhost:5000`.
+    *   Access `http://localhost:5001`.
     *   Register the admin account using a **Passkey** (FaceID, TouchID, YubiKey, or PIN).
     *   Navigate to **Settings** to configure your API keys and integrations.
 

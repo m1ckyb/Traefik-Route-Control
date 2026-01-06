@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25] - 2026-01-06
+
+### Changed
+- Updated service card layout to ensure buttons and footer actions are always aligned to the bottom of the card.
+- Changed default application port from 5000 to 5001 to avoid conflicts with other common services (e.g., Docker Registry, Flask defaults).
+
 ## [0.0.24] - 2025-12-23
 
 ### Added

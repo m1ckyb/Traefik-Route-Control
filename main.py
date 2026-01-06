@@ -215,7 +215,7 @@ def get_setting(key, required=True):
 
 # API Settings
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("API_PORT", 5000))
+API_PORT = int(os.getenv("API_PORT", 5001))
 
 # ================= INPUT VALIDATION FUNCTIONS =================
 
@@ -2086,7 +2086,7 @@ def api_key_or_login_required(f):
 # ================= AUTHENTICATION =================
 RP_ID = os.environ.get("RP_ID", "localhost")
 RP_NAME = "RouteGhost"
-ORIGIN = os.environ.get("ORIGIN", f"http://{RP_ID}:5000")
+ORIGIN = os.environ.get("ORIGIN", f"http://{RP_ID}:5001")
 
 def get_expected_origin():
     """

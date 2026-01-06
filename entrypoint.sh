@@ -32,4 +32,4 @@ chmod -R 777 /app/data > /dev/null 2>&1
 
 # Run the application
 echo "[$(date '+%Y-%m-%d %H:%M:%S %z')] 👻 RouteGhost: Starting application..."
-exec su-exec appuser:appgroup gunicorn --bind 0.0.0.0:5000 main:app
+exec su-exec appuser:appgroup gunicorn --bind 0.0.0.0:5001 main:app

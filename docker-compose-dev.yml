@@ -18,7 +18,7 @@ services:
       - routeghost_data:/app/data
     # Expose the port for the API server
     ports:
-      - "5000:5000"
+      - "5001:5001"
     # Use host networking so the script can access a local Redis instance easily.
     # If Redis is on a different server, you can remove this line.
     #network_mode: host
