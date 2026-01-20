@@ -48,6 +48,7 @@ except ImportError:
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
 import database as db
 import routing
+from mqtt_handler import mqtt_manager
 
 # Import DATA_DIR for secret key storage
 from database import DATA_DIR
@@ -1555,6 +1556,9 @@ def turn_off_service(service_id, actor=None):
     
     # Update database - clear hostname and port
     db.update_service_status(service_id, False, None, None)
+
+    # Update MQTT
+    mqtt_manager.publish_state(service_id, False)
     
     # Sync UniFi Groups (remove this service's IP/Port if not used by others)
     if routing_mode == 'unifi':
@@ -1894,6 +1898,9 @@ def turn_on_service(service_id, force=False, actor=None):
     
     # Update database with hostname and port
     db.update_service_status(service_id, True, full_hostname, random_port)
+
+    # Update MQTT
+    mqtt_manager.publish_state(service_id, True)
 
     # Sync UniFi Groups (add this service's IP/Port)
     if routing_mode == 'unifi':
@@ -2742,6 +2749,7 @@ ALLOWED_USER_SETTINGS = {
     'VPS_HOST', 'VPS_SSH_USER', 'VPS_SSH_PORT', 'VPS_SSH_KEY',
     'WG_CLIENT_ADDRESS', 'WG_PRIVATE_KEY', 'WG_SERVER_ENDPOINT',
     'WG_SERVER_PUBLIC_KEY', 'WG_ALLOWED_IPS',
+    'MQTT_ENABLED', 'MQTT_HOST', 'MQTT_PORT', 'MQTT_USER', 'MQTT_PASS', 'MQTT_DISCOVERY_PREFIX',
 }
 
 @app.route('/onboarding/complete', methods=['POST'])
@@ -2877,6 +2885,7 @@ def settings():
             # Only save whitelisted settings
             saved_count = 0
             rejected_count = 0
+            mqtt_changed = False
             for key in request.form:
                 if key in ALLOWED_USER_SETTINGS:
                     value = request.form[key]
@@ -2893,10 +2902,18 @@ def settings():
                             continue
 
                     db.set_setting(key, value)
+                    if key.startswith("MQTT_"):
+                        mqtt_changed = True
                     saved_count += 1
                 else:
                     print(f"⚠️ Security: Rejected attempt to set disallowed setting '{key}' via settings page")
                     rejected_count += 1
+            
+            if mqtt_changed:
+                try:
+                    mqtt_manager.reload()
+                except Exception as e:
+                    print(f"⚠️ Failed to reload MQTT: {e}")
             
             if rejected_count > 0:
                 flash(f'Settings saved! Updated {saved_count} settings. ({rejected_count} invalid settings were ignored)', 'warning')
@@ -3666,6 +3683,21 @@ def api_system_info():
         "uptime_seconds": uptime_seconds,
         "database": db.get_db_stats()
     })
+
+def handle_mqtt_command(service_id, state):
+    """Callback for MQTT state changes."""
+    with app.app_context():
+        if state:
+            turn_on_service(service_id, actor="MQTT")
+        else:
+            turn_off_service(service_id, actor="MQTT")
+
+# Initialize MQTT
+mqtt_manager.command_callback = handle_mqtt_command
+try:
+    mqtt_manager.start()
+except Exception as e:
+    print(f"⚠️ Failed to start MQTT manager: {e}")
 
 # Start background threads if running via Gunicorn/WSGI (imported module)
 if __name__ != "__main__":
