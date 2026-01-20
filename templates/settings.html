@@ -513,7 +513,12 @@
                 <label for="MQTT_DISCOVERY_PREFIX">Discovery Prefix</label>
                 <input type="text" id="MQTT_DISCOVERY_PREFIX" name="MQTT_DISCOVERY_PREFIX" value="{{ settings.get('MQTT_DISCOVERY_PREFIX', 'homeassistant') }}">
             </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <button type="button" class="btn btn-secondary" onclick="testMQTTConnection(event)">🔌 Test MQTT Connection</button>
+            </div>
         </div>
+
+        <hr style="margin: 2rem 0; border: 0; border-top: 1px solid var(--border);">
 
         <h3>Traefik / Redis</h3>
         <div class="settings-grid-2-col">
@@ -933,6 +938,46 @@ async function testDiscordWebhook(event) {
             showToast('Test notification sent successfully!', 'success');
         } else {
             showToast('Error: ' + (data.error || 'Failed to send notification'), 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function testMQTTConnection(event) {
+    const host = document.getElementById('MQTT_HOST').value;
+    const port = document.getElementById('MQTT_PORT').value;
+    const user = document.getElementById('MQTT_USER').value;
+    const pass = document.getElementById('MQTT_PASS').value;
+    
+    if (!host || !port) {
+        showToast('Please enter Broker Host and Port', 'warning');
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/test/mqtt', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({host: host, port: port, username: user, password: pass})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Connection failed', 'error');
         }
     } catch (e) {
         showToast('Error: ' + e.message, 'error');

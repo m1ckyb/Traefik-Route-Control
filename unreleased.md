@@ -1,10 +1,11 @@
 ### Added
 - **MQTT Integration**: Implemented MQTT support for Home Assistant Auto Discovery and control (`paho-mqtt`).
-- **Settings UI**: Added MQTT configuration section to the "Integrations" tab.
+- **Settings UI**: Added MQTT configuration section to the "Integrations" tab with a Test Connection button.
 - **Backend**: Added background MQTT handler for state updates and command processing.
 
 ### Changed
 - **Dependencies**: Added `paho-mqtt` to `requirements.txt`.
+- **UI**: Added visual separation (`<hr>`) between MQTT and Redis settings in the Integrations tab.
 
 ### Fixed
 

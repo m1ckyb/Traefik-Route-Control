@@ -3490,6 +3490,40 @@ def api_save_setting():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/test/mqtt', methods=['POST'])
+@login_required
+def test_mqtt_connection_route():
+    try:
+        data = request.json
+        host = data.get('host')
+        port = int(data.get('port', 1883))
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not host:
+            return jsonify({"error": "Host is required"}), 400
+            
+        import paho.mqtt.client as mqtt
+        
+        # Create a temporary client for testing
+        client = mqtt.Client()
+        if username:
+            client.username_pw_set(username, password)
+            
+        # Try to connect
+        client.connect(host, port, 5)
+        client.loop_start()
+        time.sleep(1) # Give it a moment
+        
+        if client.is_connected():
+            client.disconnect()
+            return jsonify({"message": "✅ MQTT Connection Successful!"})
+        else:
+            return jsonify({"error": "Could not connect to MQTT Broker"}), 400
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route('/api/test/redis', methods=['POST'])
 @login_required
 def api_test_redis():
