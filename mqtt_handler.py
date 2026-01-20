@@ -15,7 +15,7 @@ class MQTTHandler:
         self.discovery_prefix = "homeassistant"
         self.command_callback = command_callback
         self.running = False
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def load_config(self):
         """Load MQTT configuration from database."""
