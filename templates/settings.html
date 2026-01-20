@@ -167,14 +167,13 @@
         <div class="api-key-section">
             <div class="section">
                 <h4>Create New API Key</h4>
-                <form method="POST" action="/api-keys/create" class="form-horizontal">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-horizontal">
                     <div class="form-group">
-                        <label for="name">Key Name:</label>
-                        <input type="text" id="name" name="name" placeholder="e.g., Home Automation Script" required>
+                        <label for="api-key-name">Key Name:</label>
+                        <input type="text" id="api-key-name" placeholder="e.g., Home Automation Script">
                     </div>
-                    <button type="submit" class="btn btn-primary">Create Key</button>
-                </form>
+                    <button type="button" class="btn btn-primary" onclick="createApiKey()">Create Key</button>
+                </div>
             </div>
 
             <div class="section">
@@ -671,6 +670,27 @@
 </div>
 
 
+
+<!-- New API Key Modal -->
+<div id="new-key-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>API Key Created</h3>
+            <span class="modal-close" onclick="closeNewKeyModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p class="warning-text">⚠️ Save this key now! It will not be shown again.</p>
+            <div class="api-key-display">
+                <code id="generated-api-key"></code>
+                <button type="button" onclick="copyGeneratedKey()" class="btn btn-secondary">Copy</button>
+                <span id="gen-copy-status" class="copy-status"></span>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="closeNewKeyModal()" class="btn btn-primary">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 // WebAuthn Helpers
@@ -1400,6 +1420,57 @@ function showApiEndpointsModal() {
 
 function hideApiEndpointsModal() {
     document.getElementById('api-endpoints-modal').style.display = 'none';
+}
+
+async function createApiKey() {
+    const nameInput = document.getElementById('api-key-name');
+    const name = nameInput.value || 'API Key';
+    
+    try {
+        const response = await fetch('/api-keys/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({name: name})
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('generated-api-key').textContent = data.api_key;
+            document.getElementById('new-key-modal').style.display = 'flex';
+            nameInput.value = ''; // Clear input
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function closeNewKeyModal() {
+    document.getElementById('new-key-modal').style.display = 'none';
+    window.location.reload(); // Reload to show in list
+}
+
+function copyGeneratedKey() {
+    const keyElement = document.getElementById('generated-api-key');
+    const statusElement = document.getElementById('gen-copy-status');
+    const text = keyElement.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        statusElement.textContent = '✓ Copied!';
+        statusElement.className = 'copy-status success';
+        setTimeout(() => {
+            statusElement.textContent = '';
+            statusElement.className = 'copy-status';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        statusElement.textContent = '✗ Failed to copy';
+        statusElement.className = 'copy-status error';
+    });
 }
 </script>
 

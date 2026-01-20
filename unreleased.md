@@ -8,6 +8,7 @@
 - **UI**: Added visual separation (`<hr>`) between MQTT and Redis settings in the Integrations tab.
 
 ### Fixed
+- **Settings Form**: Resolved issue where "Save Settings" button was unresponsive due to a nested `<form>` tag in the API Keys section. Converted API Key creation to use AJAX/Fetch.
 - **Settings Form**: Removed `required` attribute from hidden inputs in the settings form to prevent browser validation blocking submission when tabs are switched.
 
 ### Removed

@@ -3670,7 +3670,11 @@ def api_legacy_turn_off():
 def create_api_key():
     """Create a new API key"""
     try:
-        name = request.form.get('name', 'API Key')
+        # Handle JSON or Form
+        if request.is_json:
+            name = request.json.get('name', 'API Key')
+        else:
+            name = request.form.get('name', 'API Key')
         
         # Generate a random API key (32 bytes = 64 hex characters)
         api_key = secrets.token_hex(32)
@@ -3681,11 +3685,17 @@ def create_api_key():
         # Store in database
         db.add_api_key(current_user.id, key_hash, name)
         
+        # If JSON request, return JSON
+        if request.is_json:
+            return jsonify({"success": True, "api_key": api_key, "name": name})
+        
         # Store temporarily in session to show on redirect (only shown once)
         session['new_api_key'] = api_key
         
         return redirect(url_for('settings'))
     except Exception as e:
+        if request.is_json:
+            return jsonify({"error": str(e)}), 400
         flash(f'Error creating API key: {str(e)}', 'error')
         return redirect(url_for('settings'))
 
