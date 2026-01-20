@@ -2887,6 +2887,9 @@ def settings():
             rejected_count = 0
             mqtt_changed = False
             for key in request.form:
+                if key == 'csrf_token':
+                    continue
+                    
                 if key in ALLOWED_USER_SETTINGS:
                     value = request.form[key]
                     
