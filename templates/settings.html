@@ -216,13 +216,13 @@
         <div class="settings-grid-2-col">
             <div class="form-group">
                 <label for="HEALTH_CHECK_INTERVAL">Check Interval (seconds) <span class="tooltip-icon" data-tooltip="How often to check service health in the background (min 10s)">ℹ️</span></label>
-                <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" required 
+                <input type="number" id="HEALTH_CHECK_INTERVAL" name="HEALTH_CHECK_INTERVAL" 
                        value="{{ settings.get('HEALTH_CHECK_INTERVAL', '60') }}" min="10">
             </div>
             
             <div class="form-group">
                 <label for="HEALTH_CHECK_TIMEOUT">Request Timeout (seconds) <span class="tooltip-icon" data-tooltip="Maximum time to wait for a service to respond">ℹ️</span></label>
-                <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" required 
+                <input type="number" id="HEALTH_CHECK_TIMEOUT" name="HEALTH_CHECK_TIMEOUT" 
                        value="{{ settings.get('HEALTH_CHECK_TIMEOUT', '1') }}" min="1" max="30">
             </div>
         </div>
@@ -273,19 +273,19 @@
                 <div class="settings-grid-2-col">
                     <div class="form-group">
                         <label for="CF_API_TOKEN">Cloudflare API Token <span class="tooltip-icon" data-tooltip="Token with Zone:DNS:Edit permissions">ℹ️</span></label>
-                        <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" required 
+                        <input type="password" id="CF_API_TOKEN" name="CF_API_TOKEN" 
                                value="{{ settings.get('CF_API_TOKEN', '') }}" autocomplete="off">
                     </div>
                     
                     <div class="form-group">
                         <label for="CF_ZONE_ID">Cloudflare Zone ID <span class="tooltip-icon" data-tooltip="The Zone ID for your domain from Cloudflare dashboard">ℹ️</span></label>
-                        <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" required 
+                        <input type="text" id="CF_ZONE_ID" name="CF_ZONE_ID" 
                                value="{{ settings.get('CF_ZONE_ID', '') }}">
                     </div>
                     
                     <div class="form-group">
                         <label for="DOMAIN_ROOT">Domain Root <span class="tooltip-icon" data-tooltip="Your main domain (e.g., example.com)">ℹ️</span></label>
-                        <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" required 
+                        <input type="text" id="DOMAIN_ROOT" name="DOMAIN_ROOT" 
                                value="{{ settings.get('DOMAIN_ROOT', '') }}"
                                pattern="^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
                                title="Please enter a valid domain name (e.g., example.com)"
@@ -294,7 +294,7 @@
                     
                     <div class="form-group">
                         <label for="ORIGIN_RULE_NAME">Origin Rule Name <span class="tooltip-icon" data-tooltip="Name of the Cloudflare Origin Rule to manage">ℹ️</span></label>
-                        <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" required 
+                        <input type="text" id="ORIGIN_RULE_NAME" name="ORIGIN_RULE_NAME" 
                                value="{{ settings.get('ORIGIN_RULE_NAME', '') }}"
                                placeholder="Service Rotation">
                     </div>
@@ -524,14 +524,14 @@
         <div class="settings-grid-2-col">
             <div class="form-group">
                 <label for="REDIS_HOST">Redis Host <span class="tooltip-icon" data-tooltip="Hostname or IP of the Redis server">ℹ️</span></label>
-                <input type="text" id="REDIS_HOST" name="REDIS_HOST" required 
+                <input type="text" id="REDIS_HOST" name="REDIS_HOST" 
                        value="{{ settings.get('REDIS_HOST', '') }}"
                        placeholder="127.0.0.1">
             </div>
             
             <div class="form-group">
                 <label for="REDIS_PORT">Redis Port <span class="tooltip-icon" data-tooltip="Port of the Redis server (default 6379)">ℹ️</span></label>
-                <input type="number" id="REDIS_PORT" name="REDIS_PORT" required 
+                <input type="number" id="REDIS_PORT" name="REDIS_PORT" 
                        value="{{ settings.get('REDIS_PORT', '6379') }}">
             </div>
             
