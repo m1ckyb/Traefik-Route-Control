@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=appuser:appgroup main.py .
 COPY --chown=appuser:appgroup database.py .
 COPY --chown=appuser:appgroup routing.py .
+COPY --chown=appuser:appgroup mqtt_handler.py .
 COPY --chown=appuser:appgroup VERSION.txt .
 COPY --chown=appuser:appgroup templates templates/
 COPY --chown=appuser:appgroup static static/
